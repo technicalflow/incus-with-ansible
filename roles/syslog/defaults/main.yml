@@ -1,0 +1,10 @@
+---
+log_base_dir: "/data/mikrotik"
+mikrotik_host: "192.168.50.250"
+mikrotik_fw_host: "192.168.52.250"
+required_packages:
+  - wget
+  - curl
+  - nano
+  - ufw
+  - syslog-ng

@@ -1,0 +1,50 @@
+---
+# - name: Check if Incus container exists
+#   ansible.builtin.command:
+#     cmd: "incus info {{ container_name }}"
+#   register: incus_info
+#   failed_when: false
+#   changed_when: false
+
+# - name: Skip creation if Incus container already exists
+#   ansible.builtin.debug:
+#     msg: "Container {{ container_name }} already exists. Skipping creation."
+#   when: incus_info.rc == 0
+
+- name: Ensure host source directory exists for media disk devices
+  ansible.builtin.file:
+    path: "{{ device_item.source }}"
+    state: directory
+    mode: "0755"
+  become: true
+  loop: "{{ media_devices }}"
+  loop_control:
+    loop_var: device_item
+
+- name: Create Incus container (stopped)
+  ansible.builtin.command:
+    cmd: "incus create images:{{ image_name }} {{ container_name }} --profile {{ incus_profile }}"
+  # when: incus_info.rc != 0
+  changed_when: true
+
+- name: Get current Incus container devices
+  ansible.builtin.command:
+    cmd: "incus config device show {{ container_name }}"
+  register: incus_devices
+  changed_when: false
+
+- name: Add media disk devices to Incus container
+  ansible.builtin.command:
+    cmd: "incus config device add {{ container_name }} {{ device_item.name }} disk source={{ device_item.source }} path={{ device_item.path }} readonly={{ device_item.readonly }} shift=true"
+  loop: "{{ media_devices }}"
+  loop_control:
+    loop_var: device_item
+  when: device_item.name not in (incus_devices.stdout | from_yaml | default({}, true) | dict2items | map(attribute='key') | list)
+  changed_when: true
+
+- name: Start Incus container
+  ansible.builtin.command:
+    cmd: "incus start {{ container_name }}"
+  register: incus_start_result
+  changed_when: incus_start_result.rc == 0
+  failed_when: incus_start_result.rc != 0 and 'already running' not in incus_start_result.stderr

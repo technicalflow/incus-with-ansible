@@ -1,0 +1,5 @@
+---
+container_name: ""
+image_name: ""
+incus_profile: "macvlan"
+media_devices: []

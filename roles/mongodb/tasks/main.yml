@@ -1,0 +1,50 @@
+---
+# -------------------------------------------------------------------------
+# 1. Prerequisites & Repository Configuration
+# -------------------------------------------------------------------------
+- name: Install prerequisite packages
+  ansible.builtin.apt:
+    name: "{{ mongodb_prereq_packages }}"
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Ensure keyrings directory exists
+  ansible.builtin.file:
+    path: /usr/share/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download and dearmor MongoDB GPG key
+  ansible.builtin.shell:
+    cmd: "curl -fsSL {{ mongodb_gpg_key_url }} | gpg --dearmor --batch --yes -o {{ mongodb_gpg_key_path }} && chmod 644 {{ mongodb_gpg_key_path }}"
+  args:
+    creates: "{{ mongodb_gpg_key_path }}"
+
+- name: Add MongoDB APT repository
+  ansible.builtin.copy:
+    dest: "{{ mongodb_repo_file }}"
+    content: "deb [ arch=amd64 signed-by={{ mongodb_gpg_key_path }} ] https://repo.mongodb.org/apt/ubuntu {{ distrib_codename }}/mongodb-org/{{ mongodb_version }} multiverse\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+# -------------------------------------------------------------------------
+# 2. Package Installation
+# -------------------------------------------------------------------------
+- name: Update apt cache and install MongoDB packages
+  ansible.builtin.apt:
+    name: "{{ mongodb_packages }}"
+    state: present
+    update_cache: yes
+
+# -------------------------------------------------------------------------
+# 3. Service Management
+# -------------------------------------------------------------------------
+- name: Ensure MongoDB service is enabled and started
+  ansible.builtin.systemd:
+    name: mongod
+    enabled: yes
+    state: started

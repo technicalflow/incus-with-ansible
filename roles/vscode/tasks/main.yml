@@ -1,0 +1,189 @@
+---
+# -------------------------------------------------------------------------
+# 1. Base System and Dependencies
+# -------------------------------------------------------------------------
+- name: Update apt cache and upgrade system packages VSCODE
+  ansible.builtin.apt:
+    update_cache: yes
+    upgrade: dist
+
+- name: Install base system packages
+  ansible.builtin.apt:
+    name: "{{ base_packages }}"
+    state: present
+
+# -------------------------------------------------------------------------
+# 2. User & SSH Configuration
+# -------------------------------------------------------------------------
+- name: Ensure user groups exist
+  ansible.builtin.group:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - users
+    - sudo
+
+- name: Ensure admin user exists
+  ansible.builtin.user:
+    name: "{{ admin_user }}"
+    shell: /bin/bash
+    groups: sudo,users
+    append: yes
+    create_home: yes
+    state: present
+
+- name: Ensure SSH service is enabled and running
+  ansible.builtin.systemd:
+    name: ssh
+    enabled: yes
+    state: started
+
+# -------------------------------------------------------------------------
+# 3. Kernel Configuration (Port 80 binding for non-root)
+# -------------------------------------------------------------------------
+- name: Allow unprivileged port start from 80
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-code-server.conf
+    content: "net.ipv4.ip_unprivileged_port_start=80\n"
+    mode: "0644"
+
+- name: Apply sysctl configuration immediately
+  ansible.builtin.command: sysctl --system
+  changed_when: false
+
+# -------------------------------------------------------------------------
+# 4. Code-Server Installation & Setup
+# -------------------------------------------------------------------------
+- name: Fetch latest code-server release version from GitHub
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/coder/code-server/releases/latest
+    return_content: yes
+  register: code_server_release_info
+  when: vscode_server_version == "latest"
+
+- name: Set resolved code-server version
+  ansible.builtin.set_fact:
+    effective_code_server_version: "{{ (code_server_release_info.json.tag_name | regex_replace('^v', '')) if vscode_server_version == 'latest' else vscode_server_version }}"
+
+- name: Download and install code-server deb package
+  ansible.builtin.apt:
+    deb: "https://github.com/coder/code-server/releases/download/v{{ effective_code_server_version }}/code-server_{{ effective_code_server_version }}_amd64.deb"
+    state: present
+
+- name: Create code-server configuration directory
+  ansible.builtin.file:
+    path: "/home/{{ admin_user }}/.config/code-server"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0755"
+    recurse: yes
+
+- name: Deploy code-server config.yaml
+  ansible.builtin.copy:
+    dest: "/home/{{ admin_user }}/.config/code-server/config.yaml"
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0600"
+    content: |
+      bind-addr: 0.0.0.0:80
+      auth: password
+      password: "{{ vscode_admin_password }}"
+      cert: false
+  notify: Restart code-server
+
+- name: Enable and start code-server service
+  ansible.builtin.systemd:
+    name: "code-server@{{ admin_user }}"
+    enabled: yes
+    state: started
+
+# -------------------------------------------------------------------------
+# 5. Azure CLI and PowerShell
+# -------------------------------------------------------------------------
+- name: Ensure keyring and apt sources directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /etc/apt/keyrings
+    - /etc/apt/sources.list.d
+
+- name: Download and dearmor Microsoft GPG key
+  ansible.builtin.shell: |
+    curl -sLS https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor --batch --yes -o /etc/apt/keyrings/microsoft.gpg
+    chmod 644 /etc/apt/keyrings/microsoft.gpg
+  args:
+    creates: /etc/apt/keyrings/microsoft.gpg
+
+- name: Configure Azure CLI apt sources repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/azure-cli.sources
+    mode: "0644"
+    content: |
+      Types: deb
+      URIs: https://packages.microsoft.com/repos/azure-cli/
+      Suites: {{ ubuntu_codename }}
+      Components: main
+      Architectures: amd64
+      Signed-by: /etc/apt/keyrings/microsoft.gpg
+
+- name: Install Microsoft repository configuration package for PowerShell
+  ansible.builtin.apt:
+    deb: "https://packages.microsoft.com/config/ubuntu/{{ ubuntu_version }}/packages-microsoft-prod.deb"
+    state: present
+
+# -------------------------------------------------------------------------
+# 6. Terraform and HashiCorp Repository
+# -------------------------------------------------------------------------
+- name: Download and dearmor HashiCorp GPG key
+  ansible.builtin.shell: |
+    wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor --batch --yes -o /etc/apt/keyrings/hashicorp-archive-keyring.gpg
+    chmod 644 /etc/apt/keyrings/hashicorp-archive-keyring.gpg
+  args:
+    creates: /etc/apt/keyrings/hashicorp-archive-keyring.gpg
+
+- name: Configure HashiCorp apt repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/hashicorp.list
+    mode: "0644"
+    content: "deb [signed-by=/etc/apt/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com {{ ubuntu_codename }} main\n"
+
+# -------------------------------------------------------------------------
+# 7. Install Azure CLI, PowerShell, Terraform & Ansible-core
+# -------------------------------------------------------------------------
+- name: Install Azure CLI, PowerShell, Terraform and Ansible-core
+  ansible.builtin.apt:
+    name:
+      - azure-cli
+      - powershell
+      - terraform
+      - ansible-core
+    state: present
+    update_cache: yes
+
+# -------------------------------------------------------------------------
+# 8. PowerShell Modules
+# -------------------------------------------------------------------------
+- name: Set PSGallery repository policy to Trusted
+  ansible.builtin.command: pwsh -c 'Set-PSRepository -Name PSGallery -InstallationPolicy Trusted'
+  changed_when: false
+
+- name: Install Az PowerShell module
+  ansible.builtin.command: pwsh -c 'Install-Module Az -Scope AllUsers -Force'
+
+- name: Download and install Docker CLI binary
+  ansible.builtin.unarchive:
+    src: "https://download.docker.com/linux/static/stable/x86_64/docker-{{ docker_version }}.tgz"
+    dest: /usr/local/bin/
+    remote_src: true
+    include:
+      - docker/docker
+    extra_opts:
+      - --strip-components=1
+    owner: root
+    group: root
+    mode: "0755"
+    creates: /usr/local/bin/docker
+  become: true

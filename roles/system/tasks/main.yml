@@ -1,0 +1,61 @@
+---
+- name: Check if incus service is installed
+  ansible.builtin.command: dpkg-query -W -f='${Status}' incus
+  register: incus_check
+  failed_when: incus_check.rc != 0
+  changed_when: false
+
+- name: Ensure Incus is installed
+  ansible.builtin.apt:
+    name:
+      - incus
+      - incus-extra
+    state: present
+    update_cache: yes
+  when: incus_check.rc != 0
+
+- name: Add admin user to incus groups
+  ansible.builtin.user:
+    name: "{{ host_admin_user }}"
+    groups: incus,incus-admin
+    append: yes
+
+- name: Check if macvlan profile exists
+  ansible.builtin.command:
+    cmd: incus profile list --format json
+  register: profile_check
+  failed_when: profile_check.rc != 0
+  changed_when: false
+
+- name: Create macvlan profile if it does not exist
+  ansible.builtin.command: incus profile create macvlan
+  when: >-
+    'macvlan' not in (
+      profile_check.stdout | from_json | map(attribute='name') | list
+    )
+
+- name: Apply macvlan profile configuration
+  vars:
+    macvlan_profile: |
+      config:
+        limits.cpu: "2"
+        limits.memory: 2GB
+        limits.memory.enforce: soft
+        limits.memory.swap: "false"
+      description: Macvlan profile
+      devices:
+        eth0:
+          name: eth0
+          nictype: macvlan
+          parent: eth0
+          type: nic
+        root:
+          path: /
+          pool: default
+          type: disk
+      name: macvlan
+      used_by: []
+      project: default
+
+  ansible.builtin.shell: |
+    echo '{{ macvlan_profile }}' | incus profile edit macvlan

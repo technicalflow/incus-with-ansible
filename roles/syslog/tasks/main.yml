@@ -1,0 +1,116 @@
+---
+# -------------------------------------------------------------------------
+# 1. System Packages Installation
+# -------------------------------------------------------------------------
+- name: Update apt cache and upgrade system packages Syslog
+  ansible.builtin.apt:
+    update_cache: yes
+    upgrade: dist
+
+- name: Install syslog-ng and required utilities
+  ansible.builtin.apt:
+    name: "{{ required_packages }}"
+    state: present
+
+# -------------------------------------------------------------------------
+# 2. Log Directories & Permissions
+# -------------------------------------------------------------------------
+- name: Ensure log directories exist with appropriate structure
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: syslog
+    group: adm
+    mode: "0775"
+  loop:
+    - "{{ log_base_dir }}"
+    - "{{ log_base_dir }}/logs"
+    - "{{ log_base_dir }}/fw"
+
+# -------------------------------------------------------------------------
+# 3. UFW Firewall Configuration
+# -------------------------------------------------------------------------
+- name: Allow SSH in firewall
+  community.general.ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+
+- name: Allow UDP port 514 for syslog-ng in firewall
+  community.general.ufw:
+    rule: allow
+    port: "514"
+    proto: udp
+    comment: "syslog-ng"
+
+- name: Enable UFW firewall
+  community.general.ufw:
+    state: enabled
+
+# -------------------------------------------------------------------------
+# 4. Syslog-ng Mikrotik Configurations
+# -------------------------------------------------------------------------
+- name: Ensure syslog-ng conf.d directory exists
+  ansible.builtin.file:
+    path: /etc/syslog-ng/conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy Mikrotik syslog-ng configuration (mikrotik.conf)
+  ansible.builtin.copy:
+    dest: /etc/syslog-ng/conf.d/mikrotik.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      #source
+      source s_mikrotik { udp (); };
+      #filter
+      filter f_mikrotik { host( "{{ mikrotik_host }}" ); };
+      #destination
+      destination d_mikrotik_local {
+              file("{{ log_base_dir }}/logs/${YEAR}_${MONTH}_${DAY}.log");
+      };
+
+      #log
+      log {
+              source(s_mikrotik);
+              filter( f_mikrotik );
+              destination(d_mikrotik_local);
+      };
+  notify: Restart syslog-ng
+
+- name: Deploy Mikrotik Firewall syslog-ng configuration (mikrotik_fw.conf)
+  ansible.builtin.copy:
+    dest: /etc/syslog-ng/conf.d/mikrotik_fw.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      #source is turned off because it is duplicated with mikrotik.conf
+      #source s_fw_mikrotik { udp (); };
+      #filter
+      filter f_fw_mikrotik { host( "{{ mikrotik_fw_host }}" ); };
+      #destination
+      destination d_fw_mikrotik_local {
+              file("{{ log_base_dir }}/fw/FW_${YEAR}_${MONTH}_${DAY}.log");
+      };
+
+      #log
+      log {
+              source(s_mikrotik);
+              filter( f_fw_mikrotik );
+              destination(d_fw_mikrotik_local);
+      };
+  notify: Restart syslog-ng
+
+# -------------------------------------------------------------------------
+# 5. Service Management
+# -------------------------------------------------------------------------
+- name: Ensure syslog-ng service is enabled and started
+  ansible.builtin.systemd:
+    name: syslog-ng
+    enabled: yes
+    state: started

@@ -1,0 +1,12 @@
+CONTAINERNAME,SYSTEM,IP,ROLE,MEDIA_DEVICES_NAME,MEDIA_DEVICES_SOURCE,MEDIA_DEVICES_PATH,MEDIA_DEVICES_READONLY
+msllaub24code01,ubuntu/noble/cloud,192.168.50.220,vscode,,,,
+msllaub22jell01,ubuntu/jammy/cloud,192.168.50.224,jellyfin,music|movie,/data/Music/|/data/Filmy,/data/Muzyka|/data/Filmy,true|true
+msllaub24psql01,ubuntu/noble/cloud,192.168.50.219,postgres,pgsql|pgsql_etc,/data/Backup/containers/msllaub24psql01/pgsql|/data/Backup/containers/msllaub24psql01/pgsql_etc,/var/lib/postgresql|/etc/postgresql,false|false
+msllaub24sysl01,ubuntu/noble/cloud,192.168.50.218,syslog,logsdisk,/data/Backup/logs/mikrotik,/data/mikrotik,false
+msllaub24mong01,ubuntu/noble/cloud,192.168.50.226,mongodb,mongodb,/data/Backup/containers/msllaub24mong01/mongodb,/var/lib/mongodb,false
+msllaub24msql01,ubuntu/noble/cloud,192.168.50.227,mariadb,mysql,/data/Backup/containers/msllaub24msql01/mysql,/var/lib/mysql,false
+msllaub24tube01,ubuntu/noble/cloud,192.168.50.216,,,,,
+msllaub24ados01,ubuntu/noble/cloud,192.168.50.221,,,,,,
+msllaub24path01,ubuntu/noble/cloud,192.168.50.222,,,,,,
+msllaub22oliv01,ubuntu/jammy/cloud,192.168.50.223,,,,,,
+msllaub24immi01,ubuntu/noble/cloud,192.168.50.225,,,,,,

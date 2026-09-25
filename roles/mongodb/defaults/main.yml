@@ -1,0 +1,15 @@
+---
+mongodb_version: "8.0"
+distrib_codename: "noble"
+mongodb_gpg_key_url: "https://pgp.mongodb.com/server-{{ mongodb_version }}.asc"
+mongodb_gpg_key_path: "/usr/share/keyrings/mongodb-server-{{ mongodb_version }}.gpg"
+mongodb_repo_file: "/etc/apt/sources.list.d/mongodb-org-{{ mongodb_version }}.list"
+
+mongodb_prereq_packages:
+  - curl
+  - ca-certificates
+  - gnupg
+
+mongodb_packages:
+  - mongodb-org
+  - mongodb-org-tools

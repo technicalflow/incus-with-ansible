@@ -1,0 +1,67 @@
+---
+# -------------------------------------------------------------------------
+# 1. Install & Configure PostgreSQL
+# -------------------------------------------------------------------------
+- name: Update apt cache and install PostgreSQL packages
+  ansible.builtin.apt:
+    name: "{{ postgresql_packages }}"
+    state: present
+    update_cache: yes
+
+- name: Ensure PostgreSQL service is enabled and started
+  ansible.builtin.systemd:
+    name: postgresql
+    enabled: yes
+    state: started
+
+- name: Set postgres superuser password
+  ansible.builtin.command:
+    cmd: >
+      psql -c "ALTER USER {{ pg_user }} WITH SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN PASSWORD '{{ pg_password }}';"
+  become_user: postgres
+  changed_when: false
+  no_log: true
+
+# -------------------------------------------------------------------------
+# 2. Configure pgAdmin 4 Repository
+# -------------------------------------------------------------------------
+- name: Ensure keyrings and apt sources directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /usr/share/keyrings
+    - /etc/apt/sources.list.d
+
+- name: Download and dearmor pgAdmin GPG key
+  ansible.builtin.shell:
+    cmd: "curl -fsSL https://www.pgadmin.org/static/packages_pgadmin_org.pub | gpg --dearmor --batch --yes -o /usr/share/keyrings/packages-pgadmin-org.gpg && chmod 644 /usr/share/keyrings/packages-pgadmin-org.gpg"
+  args:
+    creates: /usr/share/keyrings/packages-pgadmin-org.gpg
+
+- name: Add pgAdmin 4 apt repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/pgadmin4.list
+    content: "deb [signed-by=/usr/share/keyrings/packages-pgadmin-org.gpg] https://ftp.postgresql.org/pub/pgadmin/pgadmin4/apt/{{ distrib_codename }} pgadmin4 main\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+# -------------------------------------------------------------------------
+# 3. Install & Setup pgAdmin 4 Web
+# -------------------------------------------------------------------------
+- name: Install pgAdmin 4 packages
+  ansible.builtin.apt:
+    name: "{{ pgadmin_packages }}"
+    state: present
+    update_cache: yes
+
+- name: Run automated pgAdmin 4 web setup
+  ansible.builtin.command:
+    cmd: /usr/pgadmin4/bin/setup-web.sh --yes
+  environment:
+    PGADMIN_SETUP_EMAIL: "{{ pgadmin_setup_email }}"
+    PGADMIN_SETUP_PASSWORD: "{{ pgadmin_setup_password }}"
+  args:
+    creates: /var/lib/pgadmin/pgadmin4.db

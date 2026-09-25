@@ -1,0 +1,19 @@
+---
+admin_user: "madmin"
+vscode_admin_password: "mandarynka"
+vscode_server_version: "latest"
+docker_version: "29.8.1"
+ubuntu_version: "24.04"
+ubuntu_codename: "noble"
+base_packages:
+  - dialog
+  - zip
+  - unzip
+  - jq
+  - wget
+  - openssl
+  - sudo
+  - apt-transport-https
+  - software-properties-common
+  - ca-certificates
+  - lsb-release

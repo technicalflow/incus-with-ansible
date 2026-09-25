@@ -1,0 +1,53 @@
+---
+# -------------------------------------------------------------------------
+# 1. Package Installation
+# -------------------------------------------------------------------------
+- name: Update apt cache and install MariaDB packages
+  ansible.builtin.apt:
+    name: "{{ mariadb_packages }}"
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+
+# -------------------------------------------------------------------------
+# 2. Service Management
+# -------------------------------------------------------------------------
+- name: Ensure MariaDB service is enabled and started
+  ansible.builtin.systemd:
+    name: mariadb
+    enabled: yes
+    state: started
+
+# -------------------------------------------------------------------------
+# 3. Root Account Configuration
+# -------------------------------------------------------------------------
+- name: Set MariaDB root password
+  community.mysql.mysql_user:
+    name: root
+    host: localhost
+    password: "{{ mariadb_root_password }}"
+    login_unix_socket: /run/mysqld/mysqld.sock
+    check_implicit_admin: true
+    state: present
+  no_log: true
+
+- name: Set MariaDB sample database
+  community.mysql.mysql_db:
+    name: "{{ mariadb_db_name }}"
+    login_user: root
+    login_password: "{{ mariadb_root_password }}"
+    login_unix_socket: /run/mysqld/mysqld.sock
+    state: present
+  no_log: true
+
+- name: Set MariaDB new user
+  community.mysql.mysql_user:
+    name: "{{ mariadb_user }}"
+    password: "{{ mariadb_user_password }}"
+    login_user: root
+    login_password: "{{ mariadb_root_password }}"
+    login_unix_socket: /run/mysqld/mysqld.sock
+    state: present
+    priv:
+      "{{ mariadb_db_name }}.*": "ALL"
+  no_log: true

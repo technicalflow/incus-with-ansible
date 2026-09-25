@@ -1,0 +1,126 @@
+---
+# - name: Check system for macvlan profile
+#   hosts: localhost
+#   gather_facts: true
+#   become: true
+#   roles:
+#     - role: system
+
+- name: Prepare Dynamic Inventory and Create Containers
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Check if controller SSH public key exists
+      ansible.builtin.stat:
+        path: /home/madmin/.ssh/ansible.pub
+      register: ansible_pub_stat
+      changed_when: false
+
+    - name: Copy controller SSH public key to ./roles/main/files/ansible.pub
+      ansible.builtin.copy:
+        src: /home/madmin/.ssh/ansible.pub
+        dest: ./roles/main/files/ansible.pub
+        mode: "0644"
+      when: ansible_pub_stat.stat.exists
+
+    - name: Read incus.csv
+      community.general.read_csv:
+        path: incus.csv
+      register: incus_data
+
+    - name: Get list of existing Incus containers
+      ansible.builtin.command:
+        cmd: incus list --format json
+      register: incus_list
+      changed_when: false
+
+    - name: Set list of existing containers
+      ansible.builtin.set_fact:
+        existing_containers: "{{ (incus_list.stdout | default('[]', true) | from_json) | map(attribute='name') | list }}"
+
+    - name: Notify skipped existing containers
+      ansible.builtin.debug:
+        msg: "Container '{{ item.CONTAINERNAME }}' already exists. Skipping creation and role installation."
+      loop: "{{ incus_data.list }}"
+      when: item.CONTAINERNAME in existing_containers
+
+    - name: Create Incus containers
+      ansible.builtin.include_role:
+        name: incus_create
+      vars:
+        container_name: "{{ container_item.CONTAINERNAME }}"
+        image_name: "{{ container_item.SYSTEM }}"
+        _media_json: >-
+          {%- set names = (container_item.MEDIA_DEVICES_NAME | default('', true)).split('|') | reject('equalto', '') | list -%}
+          {%- set sources = (container_item.MEDIA_DEVICES_SOURCE | default('', true)).split('|') | reject('equalto', '') | list -%}
+          {%- set paths = (container_item.MEDIA_DEVICES_PATH | default('', true)).split('|') | reject('equalto', '') | list -%}
+          {%- set readonlys = (container_item.MEDIA_DEVICES_READONLY | default('', true)).split('|') | reject('equalto', '') | list -%}
+          [{%- for i in range(names | length) -%}
+          {"name":"{{ names[i] }}","source":"{{ sources[i] }}","path":"{{ paths[i] }}","readonly":"{{ readonlys[i] | default('true') }}"}
+          {%- if not loop.last -%},{%- endif -%}
+          {%- endfor -%}]
+        media_devices: "{{ _media_json | from_json }}"
+      loop: "{{ incus_data.list }}"
+      loop_control:
+        loop_var: container_item
+      when: container_item.CONTAINERNAME not in existing_containers
+
+    - name: Add containers to inventory
+      ansible.builtin.add_host:
+        name: "{{ item.CONTAINERNAME }}"
+        groups: "{{ ['incus_containers'] + (['role_' ~ item.ROLE] if (item.ROLE | default('', true) | trim != '') else []) }}"
+        ansible_connection: community.general.incus
+        ip_address: "{{ item.IP }}/23"
+        image_name: "{{ item.SYSTEM }}"
+      loop: "{{ incus_data.list }}"
+      when: item.CONTAINERNAME not in existing_containers
+
+- name: Base container installation
+  hosts: incus_containers
+  serial: 1
+  gather_facts: true
+  become: true
+  roles:
+    - role: main
+
+- name: Install Jellyfin role
+  hosts: role_jellyfin
+  gather_facts: true
+  become: true
+  roles:
+    - role: jellyfin
+
+- name: Install VSCode role
+  hosts: role_vscode
+  gather_facts: true
+  become: true
+  roles:
+    - role: vscode
+
+- name: Install PostgreSQL role
+  hosts: role_postgres
+  gather_facts: true
+  become: true
+  roles:
+    - role: postgres
+
+- name: Install Syslog role
+  hosts: role_syslog
+  gather_facts: true
+  become: true
+  roles:
+    - role: syslog
+
+- name: Install MongoDB role
+  hosts: role_mongodb
+  gather_facts: true
+  become: true
+  roles:
+    - role: mongodb
+
+- name: Install MariaDB role
+  hosts: role_mariadb
+  gather_facts: true
+  become: true
+  roles:
+    - role: mariadb

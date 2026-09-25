@@ -1,0 +1,9 @@
+---
+mariadb_root_password: "mandarynka"
+mariadb_db_name: "db100"
+mariadb_user: "madmin"
+mariadb_user_password: "mandarynka"
+mariadb_packages:
+  - mariadb-server
+  - mariadb-client
+  - python3-pymysql

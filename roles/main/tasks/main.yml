@@ -1,0 +1,119 @@
+---
+- name: Update apt cache and upgrade system packages
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 3600
+    upgrade: dist
+
+- name: Install required system packages
+  ansible.builtin.apt:
+    name: "{{ packages_to_install }}"
+    state: present
+
+- name: Configure system locale
+  block:
+    - name: Ensure target locale is generated
+      ansible.builtin.command:
+        cmd: "locale-gen {{ target_locale }}"
+      changed_when: false
+
+    - name: Set system default locale
+      ansible.builtin.copy:
+        dest: /etc/default/locale
+        content: |
+          LANG={{ target_locale }}
+          LC_ALL={{ target_locale }}
+        owner: root
+        group: root
+        mode: "0644"
+
+- name: Configure system timezone
+  community.general.timezone:
+    name: "{{ target_timezone }}"
+
+- name: Allow unprivileged users to bind to ports below 1024
+  ansible.builtin.lineinfile:
+    path: /etc/sysctl.conf
+    insertafter: EOF
+    line: "net.ipv4.ip_unprivileged_port_start=80"
+    state: present
+
+- name: Ensure user groups exist
+  ansible.builtin.group:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - users
+    - sudo
+
+- name: Create admin user (madmin)
+  ansible.builtin.user:
+    name: "{{ admin_user }}"
+    groups: users,sudo
+    append: yes
+    shell: /bin/bash
+    password: "{{ admin_password_hash }}"
+    state: present
+
+- name: Add authorized SSH key for admin user
+  ansible.posix.authorized_key:
+    user: "{{ admin_user }}"
+    state: present
+    key: "{{ lookup('file', '../files/ansible.pub') }}"
+
+- name: Configure passwordless sudo for admin user
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/{{ admin_user }}"
+    content: "{{ admin_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"
+
+- name: Enable SSH password authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PasswordAuthentication"
+    line: "PasswordAuthentication yes"
+    state: present
+  notify: Restart ssh
+
+- name: Delete existing Netplan configurations
+  ansible.builtin.shell: rm -f /etc/netplan/*.yaml
+  changed_when: false
+
+- name: Configure static network via Netplan
+  ansible.builtin.copy:
+    dest: /etc/netplan/10-incus-static.yaml
+    content: |
+      network:
+        version: 2
+        ethernets:
+          eth0:
+            match:
+              name: "e*"
+            addresses:
+              - "{{ ip_address }}"
+            nameservers:
+              addresses:
+                - "{{ gateway }}"
+            routes:
+              - to: default
+                via: "{{ gateway }}"
+                metric: 100
+    owner: root
+    group: root
+    mode: "0600"
+  register: netplan_config
+
+- name: Apply Netplan static network configuration
+  ansible.builtin.command:
+    cmd: netplan apply
+  when: netplan_config.changed
+
+- name: Execute touch command marker (/tmp/done)
+  ansible.builtin.file:
+    path: /tmp/done
+    state: touch
+    mode: "0644"
+  changed_when: false

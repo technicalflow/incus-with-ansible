@@ -1,0 +1,16 @@
+---
+admin_user: "madmin"
+admin_password_hash: "$y$j9T$hNH9p4Nd4j9V1Lhf.mnSM0$ul5D1KOYgXpQxIpY779zGN/oqba3fZPG.3lGMVW8TE5"
+host_admin_user: "madmin"
+target_timezone: "Europe/Warsaw"
+target_locale: "en_US.UTF-8"
+ip_address: ""
+gateway: "192.168.50.250"
+packages_to_install:
+  - nano
+  - curl
+  - gnupg
+  - htop
+  - git
+  - netplan.io
+  - openssh-server

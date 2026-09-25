@@ -1,0 +1,5 @@
+---
+# Global variables for all plays and roles
+admin_user: "madmin"
+admin_password_hash: "$y$j9T$hNH9p4Nd4j9V1Lhf.mnSM0$ul5D1KOYgXpQxIpY779zGN/oqba3fZPG.3lGMVW8TE5"
+gateway: "192.168.50.250"

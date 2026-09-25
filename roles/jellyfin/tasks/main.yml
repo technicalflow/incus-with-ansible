@@ -1,0 +1,47 @@
+---
+- name: Ensure apt keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Download and dearmor Jellyfin GPG key
+  ansible.builtin.shell: curl -fsSL {{ jellyfin_key_url }} | gpg --dearmor --yes --output {{ jellyfin_key_path }}
+  args:
+    creates: "{{ jellyfin_key_path }}"
+
+- name: Add Jellyfin apt source
+  ansible.builtin.copy:
+    dest: "{{ jellyfin_sources }}"
+    content: |
+      Types: deb
+      URIs: {{ jellyfin_apt_uri }}
+      Suites: {{ jellyfin_suite }}
+      Components: main
+      Architectures: amd64
+      Signed-By: {{ jellyfin_key_path }}
+    mode: "0644"
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+  when: ansible_facts['pkg_mgr'] == 'apt'
+
+- name: Install jellyfin
+  ansible.builtin.apt:
+    name: jellyfin
+    state: present
+
+- name: Ensure jellyfin service is started and enabled
+  ansible.builtin.systemd:
+    name: jellyfin.service
+    enabled: yes
+    state: started
+
+- name: Create /data directory
+  ansible.builtin.file:
+    path: /data
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
