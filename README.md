@@ -36,9 +36,10 @@ Add or modify rows in `incus.csv` to specify your containers:
 ### 2. Global Variables (`group_vars/all.yml`)
 
 Adjust default values such as:
-- `admin_user`: Default admin account name (e.g. `madmin`).
-- `admin_password_hash`: Password hash for the admin account.
+- `admin_user`: Default container admin account name (e.g. `madmin`).
+- `admin_password_hash`: Password hash for the admin account (for password: mandarynka).
 - `gateway`: Default network gateway for the containers.
+- `host_admin_user`: Incus host admin user required only to provision Incus with system role.
 
 ---
 
