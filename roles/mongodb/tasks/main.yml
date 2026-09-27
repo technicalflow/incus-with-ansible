@@ -40,6 +40,15 @@
     state: present
     update_cache: yes
 
+- name: Set permissions and ownership on MongoDB data directory
+  ansible.builtin.file:
+    path: /var/lib/mongodb
+    owner: mongodb
+    group: mongodb
+    mode: '0755'
+    recurse: yes
+    state: directory
+    
 # -------------------------------------------------------------------------
 # 3. Service Management
 # -------------------------------------------------------------------------

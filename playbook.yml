@@ -59,7 +59,7 @@
           {"name":"{{ names[i] }}","source":"{{ sources[i] }}","path":"{{ paths[i] }}","readonly":"{{ readonlys[i] | default('true') }}"}
           {%- if not loop.last -%},{%- endif -%}
           {%- endfor -%}]
-        media_devices: "{{ _media_json | from_json }}"
+        media_devices: "{{ _media_json }}"
       loop: "{{ incus_data.list }}"
       loop_control:
         loop_var: container_item

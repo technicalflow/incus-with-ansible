@@ -62,7 +62,7 @@ Adjust default values such as:
 - **Network Profile**: An Incus profile named `macvlan` (can be created using `roles/system`).
 - **Ansible Collections**:
   ```bash
-  ansible-galaxy collection install community.general ansible.posix
+  ansible-galaxy collection install community.general ansible.posix community.mysql
   ```
 - **SSH Key**: Controller public key at `/home/madmin/.ssh/ansible.pub` (copied to containers during setup).
 
