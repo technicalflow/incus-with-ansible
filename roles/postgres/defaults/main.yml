@@ -2,7 +2,7 @@
 pg_user: "postgres"
 pg_password: "mandarynka"
 pgadmin_setup_email: "admin@example.com"
-pgadmin_setup_password: "mandarynka"
+pgadmin_setup_password: "pgadminpass123"
 distrib_codename: "noble"
 
 postgresql_packages:

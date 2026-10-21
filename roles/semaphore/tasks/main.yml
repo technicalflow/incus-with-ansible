@@ -105,11 +105,10 @@
       [Install]
       WantedBy=multi-user.target
 
-- name: Enable and start Semaphore service
+- name: Stop Semaphore service before database migration
   ansible.builtin.systemd:
     name: semaphore
-    state: started
-    enabled: true
+    state: stopped
     daemon_reload: true
 
 - name: Create Semaphore admin user
@@ -120,7 +119,16 @@
     --name "{{ admin_user }}"
     --email "{{ admin_email }}"
     --config /opt/config.json
-  register: admin_user
+  register: semaphore_admin_user_result
   # Avoid failure on subsequent runs if the user already exists
-  failed_when: admin_user.rc != 0 and 'already exists' not in admin_user.stderr | lower
-  changed_when: admin_user.rc == 0
+  failed_when: >-
+    semaphore_admin_user_result.rc != 0 and
+    'already exists' not in semaphore_admin_user_result.stderr | lower
+  changed_when: semaphore_admin_user_result.rc == 0
+
+- name: Enable and start Semaphore service
+  ansible.builtin.systemd:
+    name: semaphore
+    state: started
+    enabled: true
+    daemon_reload: true

@@ -2,10 +2,10 @@
 # -------------------------------------------------------------------------
 # 1. Base System and Dependencies
 # -------------------------------------------------------------------------
-- name: Update apt cache and upgrade system packages VSCODE
-  ansible.builtin.apt:
-    update_cache: yes
-    upgrade: dist
+# - name: Update apt cache and upgrade system packages VSCODE
+#   ansible.builtin.apt:
+#     update_cache: yes
+#     upgrade: dist
 
 - name: Install base system packages
   ansible.builtin.apt:
@@ -15,28 +15,28 @@
 # -------------------------------------------------------------------------
 # 2. User & SSH Configuration
 # -------------------------------------------------------------------------
-- name: Ensure user groups exist
-  ansible.builtin.group:
-    name: "{{ item }}"
-    state: present
-  loop:
-    - users
-    - sudo
+# - name: Ensure user groups exist
+#   ansible.builtin.group:
+#     name: "{{ item }}"
+#     state: present
+#   loop:
+#     - users
+#     - sudo
 
-- name: Ensure admin user exists
-  ansible.builtin.user:
-    name: "{{ admin_user }}"
-    shell: /bin/bash
-    groups: sudo,users
-    append: yes
-    create_home: yes
-    state: present
+# - name: Ensure admin user exists
+#   ansible.builtin.user:
+#     name: "{{ admin_user }}"
+#     shell: /bin/bash
+#     groups: sudo,users
+#     append: yes
+#     create_home: yes
+#     state: present
 
-- name: Ensure SSH service is enabled and running
-  ansible.builtin.systemd:
-    name: ssh
-    enabled: yes
-    state: started
+# - name: Ensure SSH service is enabled and running
+#   ansible.builtin.systemd:
+#     name: ssh
+#     enabled: yes
+#     state: started
 
 # -------------------------------------------------------------------------
 # 3. Kernel Configuration (Port 80 binding for non-root)

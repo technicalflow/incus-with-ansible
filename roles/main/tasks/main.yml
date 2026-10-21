@@ -1,10 +1,10 @@
 ---
-- name: Wait for cloud-init to finish (avoids apt lock conflicts)
-  ansible.builtin.command:
-    cmd: cloud-init status --wait
-  register: cloud_init_status
-  changed_when: false
-  failed_when: cloud_init_status.rc not in [0, 2]
+# - name: Wait for cloud-init to finish (avoids apt lock conflicts)
+#   ansible.builtin.command:
+#     cmd: cloud-init status --wait
+#   register: cloud_init_status
+#   changed_when: false
+#   failed_when: cloud_init_status.rc not in [0, 2]
 
 - name: Update apt cache and upgrade system packages
   ansible.builtin.apt:
@@ -84,6 +84,12 @@
     line: "PasswordAuthentication yes"
     state: present
   notify: Restart ssh
+
+- name: Ensure SSH service is enabled and running
+  ansible.builtin.systemd:
+    name: ssh
+    enabled: true
+    state: started
 
 - name: Delete existing Netplan configurations
   ansible.builtin.shell: rm -f /etc/netplan/*.yaml

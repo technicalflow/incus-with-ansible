@@ -1,0 +1,103 @@
+---
+# -------------------------------------------------------------------------
+# 1. Base System and Dependencies
+# -------------------------------------------------------------------------
+# - name: Update apt cache and upgrade system packages (Already in main role)
+#   ansible.builtin.apt:
+#     update_cache: yes
+#     upgrade: dist
+
+- name: Install base system packages
+  ansible.builtin.apt:
+    name: "{{ base_packages }}"
+    state: present
+
+# -------------------------------------------------------------------------
+# 5. Azure CLI and PowerShell
+# -------------------------------------------------------------------------
+- name: Ensure keyring and apt sources directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /etc/apt/keyrings
+    - /etc/apt/sources.list.d
+
+- name: Download and dearmor Microsoft GPG key
+  ansible.builtin.shell: |
+    curl -sLS https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor --batch --yes -o /etc/apt/keyrings/microsoft.gpg
+    chmod 644 /etc/apt/keyrings/microsoft.gpg
+  args:
+    creates: /etc/apt/keyrings/microsoft.gpg
+
+- name: Configure Azure CLI apt sources repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/azure-cli.sources
+    mode: "0644"
+    content: |
+      Types: deb
+      URIs: https://packages.microsoft.com/repos/azure-cli/
+      Suites: {{ ubuntu_codename }}
+      Components: main
+      Architectures: amd64
+      Signed-by: /etc/apt/keyrings/microsoft.gpg
+
+- name: Install Microsoft repository configuration package for PowerShell
+  ansible.builtin.apt:
+    deb: "https://packages.microsoft.com/config/ubuntu/{{ ubuntu_version }}/packages-microsoft-prod.deb"
+    state: present
+
+# -------------------------------------------------------------------------
+# 6. Terraform and HashiCorp Repository
+# -------------------------------------------------------------------------
+- name: Download and dearmor HashiCorp GPG key
+  ansible.builtin.shell: |
+    wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor --batch --yes -o /etc/apt/keyrings/hashicorp-archive-keyring.gpg
+    chmod 644 /etc/apt/keyrings/hashicorp-archive-keyring.gpg
+  args:
+    creates: /etc/apt/keyrings/hashicorp-archive-keyring.gpg
+
+- name: Configure HashiCorp apt repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/hashicorp.list
+    mode: "0644"
+    content: "deb [signed-by=/etc/apt/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com {{ ubuntu_codename }} main\n"
+
+# -------------------------------------------------------------------------
+# 7. Install Azure CLI, PowerShell, Terraform & Ansible-core
+# -------------------------------------------------------------------------
+- name: Install Azure CLI, PowerShell, Terraform and Ansible-core
+  ansible.builtin.apt:
+    name:
+      - azure-cli
+      - powershell
+      - terraform
+      - ansible-core
+    state: present
+    update_cache: yes
+
+# -------------------------------------------------------------------------
+# 8. PowerShell Modules
+# -------------------------------------------------------------------------
+- name: Set PSGallery repository policy to Trusted
+  ansible.builtin.command: pwsh -c 'Set-PSRepository -Name PSGallery -InstallationPolicy Trusted'
+  changed_when: false
+
+- name: Install Az PowerShell module
+  ansible.builtin.command: pwsh -c 'Install-Module Az -Scope AllUsers -Force'
+
+- name: Download and install Docker CLI binary
+  ansible.builtin.unarchive:
+    src: "https://download.docker.com/linux/static/stable/x86_64/docker-{{ docker_version }}.tgz"
+    dest: /usr/local/bin/
+    remote_src: true
+    include:
+      - docker/docker
+    extra_opts:
+      - --strip-components=1
+    owner: root
+    group: root
+    mode: "0755"
+    creates: /usr/local/bin/docker
+  become: true

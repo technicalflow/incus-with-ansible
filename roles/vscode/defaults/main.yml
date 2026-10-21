@@ -1,5 +1,5 @@
 ---
-admin_user: "madmin"
+# admin_user: "madmin" # Already defined in group_vars/all.yml
 vscode_admin_password: "mandarynka"
 vscode_server_version: "latest"
 docker_version: "29.8.1"

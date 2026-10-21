@@ -2,10 +2,10 @@
 # -------------------------------------------------------------------------
 # 1. System Packages Installation
 # -------------------------------------------------------------------------
-- name: Update apt cache and upgrade system packages Syslog
-  ansible.builtin.apt:
-    update_cache: yes
-    upgrade: dist
+# - name: Update apt cache and upgrade system packages Syslog
+#   ansible.builtin.apt:
+#     update_cache: yes
+#     upgrade: dist
 
 - name: Install syslog-ng and required utilities
   ansible.builtin.apt:

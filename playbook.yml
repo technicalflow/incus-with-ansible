@@ -72,69 +72,19 @@
         ansible_connection: community.general.incus
         ip_address: "{{ item.IP }}/23"
         image_name: "{{ item.SYSTEM }}"
+        container_role: "{{ item.ROLE | default('', true) | trim }}"
       loop: "{{ incus_data.list }}"
       when: item.CONTAINERNAME not in existing_containers
 
-- name: Base container installation
+- name: Install container roles
   hosts: incus_containers
   serial: 1
   gather_facts: true
   become: true
   roles:
     - role: main
-
-- name: Install Jellyfin role
-  hosts: role_jellyfin
-  gather_facts: true
-  become: true
-  roles:
-    - role: jellyfin
-
-- name: Install VSCode role
-  hosts: role_vscode
-  gather_facts: true
-  become: true
-  roles:
-    - role: vscode
-
-- name: Install PostgreSQL role
-  hosts: role_postgres
-  gather_facts: true
-  become: true
-  roles:
-    - role: postgres
-
-- name: Install Syslog role
-  hosts: role_syslog
-  gather_facts: true
-  become: true
-  roles:
-    - role: syslog
-
-- name: Install MongoDB role
-  hosts: role_mongodb
-  gather_facts: true
-  become: true
-  roles:
-    - role: mongodb
-
-- name: Install MariaDB role
-  hosts: role_mariadb
-  gather_facts: true
-  become: true
-  roles:
-    - role: mariadb
-
-- name: Install Grafana role
-  hosts: role_grafana
-  gather_facts: true
-  become: true
-  roles:
-    - role: grafana
-
-- name: Install Semaphore role
-  hosts: role_semaphore
-  gather_facts: true
-  become: true
-  roles:
-    - role: semaphore
+  tasks:
+    - name: Install service role
+      ansible.builtin.include_role:
+        name: "{{ container_role }}"
+      when: container_role | length > 0
