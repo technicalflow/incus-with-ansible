@@ -38,6 +38,17 @@
   changed_when: true
   no_log: true
 
+- name: Ensure Semaphore database user password is current
+  ansible.builtin.command:
+    cmd: >
+      psql -h {{ pg_host }} -U {{ pg_user }} -d postgres
+      -v ON_ERROR_STOP=1 -v pw={{ semaphore_postgres_password | quote }} -f -
+    stdin: 'ALTER ROLE "{{ semaphore_postgres_user }}" PASSWORD :''pw'';'
+  environment:
+    PGPASSWORD: "{{ pg_password }}"
+  changed_when: true
+  no_log: true
+
 - name: Check if Semaphore database exists
   ansible.builtin.command:
     cmd: >
