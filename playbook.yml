@@ -124,3 +124,17 @@
   become: true
   roles:
     - role: mariadb
+
+- name: Install Grafana role
+  hosts: role_grafana
+  gather_facts: true
+  become: true
+  roles:
+    - role: grafana
+
+- name: Install Semaphore role
+  hosts: role_semaphore
+  gather_facts: true
+  become: true
+  roles:
+    - role: semaphore

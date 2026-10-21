@@ -1,0 +1,462 @@
+---
+    # ---------------------------------------------------------
+    # System Dependencies & Prometheus
+    # ---------------------------------------------------------
+    - name: Install system dependencies and Prometheus
+      ansible.builtin.apt:
+        name:
+          - curl
+          - gnupg
+          - apt-transport-https
+          - unzip
+          - tar
+          - prometheus
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    # ---------------------------------------------------------
+    # 1. Grafana Installation & Datasources
+    # ---------------------------------------------------------
+    - name: Ensure keyrings directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Add Grafana APT GPG key
+      ansible.builtin.get_url:
+        url: https://apt.grafana.com/gpg.key
+        dest: /etc/apt/keyrings/grafana.asc
+        mode: "0644"
+
+    - name: Add Grafana APT repository
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stable main"
+        state: present
+        filename: grafana
+
+    - name: Install Grafana package
+      ansible.builtin.apt:
+        name: grafana
+        state: present
+        update_cache: true
+
+    - name: Configure Grafana datasources with correlated links
+      ansible.builtin.copy:
+        dest: /etc/grafana/provisioning/datasources/datasources.yaml
+        mode: "0644"
+        content: |
+          apiVersion: 1
+          datasources:
+            # 1. Prometheus with Exemplars linking to Tempo
+            - name: Prometheus
+              type: prometheus
+              uid: prometheus
+              access: proxy
+              url: http://localhost:9090
+              isDefault: true
+              editable: true
+              jsonData:
+                exemplarTraceIdDestinations:
+                  - datasourceUid: tempo
+                    name: trace_id
+            # 2. Loki with Derived Fields linking to Tempo traces
+            - name: Loki
+              type: loki
+              uid: loki
+              access: proxy
+              url: http://localhost:3100
+              editable: true
+              jsonData:
+                derivedFields:
+                  - datasourceUid: tempo
+                    matcherRegex: '(?:trace_id|traceId|traceID|tid)=(\w+)'
+                    name: TraceID
+                    url: '$${__value.raw}'
+            # 3. Tempo linked to Loki logs, Prometheus metrics, and Node Graph
+            - name: Tempo
+              type: tempo
+              uid: tempo
+              access: proxy
+              url: http://localhost:3200
+              editable: true
+              jsonData:
+                nodeGraph:
+                  enabled: true
+                tracesToLogsV2:
+                  datasourceUid: loki
+                  spanStartTimeShift: '-1m'
+                  spanEndTimeShift: '1m'
+                  filterByTraceID: true
+                tracesToMetrics:
+                  datasourceUid: prometheus
+                  spanStartTimeShift: '-5m'
+                  spanEndTimeShift: '5m'
+                serviceMap:
+                  datasourceUid: prometheus
+                search:
+                  hide: false
+      notify: Restart Grafana
+
+    # - name: Configure Grafana datasources (inline)
+    #   ansible.builtin.copy:
+    #     dest: /etc/grafana/provisioning/datasources/datasources.yaml
+    #     mode: "0644"
+    #     content: |
+    #       apiVersion: 1
+    #       datasources:
+    #         - name: Prometheus
+    #           type: prometheus
+    #           access: proxy
+    #           url: http://localhost:9090
+    #           isDefault: true
+    #           editable: false
+
+    #         - name: Loki
+    #           type: loki
+    #           access: proxy
+    #           url: http://localhost:3100
+    #           editable: false
+
+    #         - name: Tempo
+    #           type: tempo
+    #           access: proxy
+    #           url: http://localhost:3200
+    #           editable: false
+    #   notify: Restart Grafana
+
+    - name: Enable and start Grafana service
+      ansible.builtin.systemd:
+        name: grafana-server
+        enabled: true
+        state: started
+
+    # ---------------------------------------------------------
+    # 2. Prometheus Configuration
+    # ---------------------------------------------------------
+    - name: Configure Prometheus (inline)
+      ansible.builtin.copy:
+        dest: /etc/prometheus/prometheus.yml
+        mode: "0644"
+        content: |
+          global:
+            scrape_interval: 15s
+            evaluation_interval: 15s
+
+          scrape_configs:
+            - job_name: "prometheus"
+              static_configs:
+                - targets: ["localhost:9090"]
+
+            - job_name: "loki"
+              static_configs:
+                - targets: ["localhost:3100"]
+
+            - job_name: "tempo"
+              static_configs:
+                - targets: ["localhost:3200"]
+      notify: Restart Prometheus
+
+    - name: Enable and start Prometheus service
+      ansible.builtin.systemd:
+        name: prometheus
+        enabled: true
+        state: started
+
+    # ---------------------------------------------------------
+    # 3. Loki Installation & Configuration
+    # ---------------------------------------------------------
+    - name: Create Loki system user and group
+      ansible.builtin.user:
+        name: loki
+        system: true
+        shell: /usr/sbin/nologin
+        create_home: false
+
+    - name: Create Loki directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: loki
+        group: loki
+        mode: "0755"
+      loop:
+        - /etc/loki
+        - /var/lib/loki
+        - /var/lib/loki/chunks
+        - /var/lib/loki/rules
+        - /var/lib/loki/compactor
+
+    - name: Download Loki zip archive
+      ansible.builtin.get_url:
+        url: "https://github.com/grafana/loki/releases/download/v{{ loki_version }}/loki-linux-{{ sys_arch }}.zip"
+        dest: "/tmp/loki-linux-{{ sys_arch }}.zip"
+        mode: "0644"
+
+    - name: Extract Loki archive
+      ansible.builtin.unarchive:
+        src: "/tmp/loki-linux-{{ sys_arch }}.zip"
+        dest: /tmp
+        remote_src: true
+
+    - name: Install Loki binary to /usr/local/bin/loki
+      ansible.builtin.copy:
+        src: "/tmp/loki-linux-{{ sys_arch }}"
+        dest: /usr/local/bin/loki
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0755"
+      notify: Restart Loki
+
+    - name: Configure Loki (inline)
+      ansible.builtin.copy:
+        dest: /etc/loki/loki-config.yml
+        owner: loki
+        group: loki
+        mode: "0644"
+        content: |
+          auth_enabled: false
+
+          server:
+            http_listen_port: 3100
+            grpc_listen_port: 9096
+
+          common:
+            instance_addr: 127.0.0.1
+            path_prefix: /var/lib/loki
+            storage:
+              filesystem:
+                chunks_directory: /var/lib/loki/chunks
+                rules_directory: /var/lib/loki/rules
+            replication_factor: 1
+            ring:
+              kvstore:
+                store: inmemory
+
+          schema_config:
+            configs:
+              - from: 2024-01-01
+                store: tsdb
+                object_store: filesystem
+                schema: v13
+                index:
+                  prefix: index_
+                  period: 24h
+
+          limits_config:
+            retention_period: "{{ loki_retention_period }}"
+            max_query_lookback: "{{ loki_retention_period }}"
+
+          compactor:
+            working_directory: /var/lib/loki/compactor
+            retention_enabled: true
+            delete_request_store: filesystem
+
+          analytics:
+            reporting_enabled: false
+      notify: Restart Loki
+
+    - name: Deploy Loki systemd service (inline)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/loki.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Loki Log Aggregator
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          Type=simple
+          User=loki
+          Group=loki
+          ExecStart=/usr/local/bin/loki -config.file=/etc/loki/loki-config.yml
+          Restart=always
+          RestartSec=10
+          LimitNOFILE=65536
+          NoNewPrivileges=true
+          PrivateTmp=true
+          ProtectSystem=strict
+          ProtectHome=true
+          ReadWritePaths=/var/lib/loki
+
+          [Install]
+          WantedBy=multi-user.target
+      notify:
+        - Reload systemd
+        - Restart Loki
+
+    - name: Enable and start Loki service
+      ansible.builtin.systemd:
+        name: loki
+        enabled: true
+        state: started
+
+    # ---------------------------------------------------------
+    # 4. Grafana Alloy Log Collection
+    # ---------------------------------------------------------
+    - name: Install Grafana Alloy package
+      ansible.builtin.apt:
+        name: alloy
+        state: present
+        update_cache: true
+
+    - name: Grant Alloy access to the system journal
+      ansible.builtin.user:
+        name: alloy
+        groups:
+          - adm
+          - systemd-journal
+        append: true
+      notify: Restart Alloy
+
+    - name: Configure Grafana Alloy
+      ansible.builtin.copy:
+        dest: /etc/alloy/config.alloy
+        owner: alloy
+        group: alloy
+        mode: "0640"
+        content: |
+          loki.write "local" {
+            endpoint {
+              url = "http://127.0.0.1:{{ loki_port }}/loki/api/v1/push"
+            }
+          }
+
+          loki.relabel "journal" {
+            forward_to = []
+
+            rule {
+              source_labels = ["__journal__systemd_unit"]
+              target_label  = "unit"
+            }
+          }
+
+          loki.source.journal "read" {
+            max_age        = "24h"
+            labels         = {job = "systemd-journal"}
+            relabel_rules  = loki.relabel.journal.rules
+            forward_to     = [loki.write.local.receiver]
+          }
+      notify: Restart Alloy
+
+    - name: Enable and start Grafana Alloy service
+      ansible.builtin.systemd:
+        name: alloy
+        enabled: true
+        state: started
+
+    # ---------------------------------------------------------
+    # 5. Tempo Installation & Configuration
+    # ---------------------------------------------------------
+    - name: Create Tempo system user and group
+      ansible.builtin.user:
+        name: tempo
+        system: true
+        shell: /usr/sbin/nologin
+        create_home: false
+
+    - name: Create Tempo directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: tempo
+        group: tempo
+        mode: "0755"
+      loop:
+        - /etc/tempo
+        - /var/tempo
+        - /var/tempo/wal
+        - /var/tempo/blocks
+        - /var/tempo/wal/blocks
+        - /var/tempo/live-store
+
+    - name: Download Tempo tarball
+      ansible.builtin.get_url:
+        url: "https://github.com/grafana/tempo/releases/download/v{{ tempo_version }}/tempo_{{ tempo_version }}_linux_{{ sys_arch }}.tar.gz"
+        dest: "/tmp/tempo_{{ tempo_version }}_linux_{{ sys_arch }}.tar.gz"
+        mode: "0644"
+
+    - name: Extract Tempo archive
+      ansible.builtin.unarchive:
+        src: "/tmp/tempo_{{ tempo_version }}_linux_{{ sys_arch }}.tar.gz"
+        dest: /tmp
+        remote_src: true
+
+    - name: Install Tempo binary to /usr/local/bin/tempo
+      ansible.builtin.copy:
+        src: /tmp/tempo
+        dest: /usr/local/bin/tempo
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0755"
+      notify: Restart Tempo
+
+    - name: Configure Tempo (inline)
+      ansible.builtin.copy:
+        dest: /etc/tempo/tempo-config.yml
+        owner: tempo
+        group: tempo
+        mode: "0644"
+        content: |
+          stream_over_http_enabled: true
+          server:
+            http_listen_port: 3200
+            grpc_listen_port: 9095
+          distributor:
+            receivers:
+              otlp:
+                protocols:
+                  grpc:
+                    endpoint: "0.0.0.0:4317"
+                  http:
+                    endpoint: "0.0.0.0:4318"
+          storage:
+            trace:
+              backend: local
+              wal:
+                path: /var/tempo/wal
+              local:
+                path: /var/tempo/blocks
+          usage_report:
+            reporting_enabled: false
+      notify: Restart Tempo
+
+    - name: Deploy Tempo systemd service (inline)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/tempo.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Tempo Distributed Tracing Backend
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          Type=simple
+          User=tempo
+          Group=tempo
+          ExecStart=/usr/local/bin/tempo -config.file=/etc/tempo/tempo-config.yml
+          Restart=always
+          RestartSec=10
+          LimitNOFILE=65536
+          ReadWritePaths=/var/tempo
+          NoNewPrivileges=true
+          PrivateTmp=true
+          ProtectSystem=strict
+          ProtectHome=true
+
+          [Install]
+          WantedBy=multi-user.target
+      notify:
+        - Reload systemd
+        - Restart Tempo
+
+    - name: Enable and start Tempo service
+      ansible.builtin.systemd:
+        name: tempo
+        enabled: true
+        state: started

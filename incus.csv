@@ -6,7 +6,8 @@ msllaub24sysl01,ubuntu/noble/cloud,192.168.50.218,syslog,logsdisk,/data/Backup/l
 msllaub24mong01,ubuntu/noble/cloud,192.168.50.226,mongodb,mongodb,/data/Backup/containers/msllaub24mong01/mongodb,/var/lib/mongodb,false
 msllaub24msql01,ubuntu/noble/cloud,192.168.50.227,mariadb,mysql,/data/Backup/containers/msllaub24msql01/mysql,/var/lib/mysql,false
 msllaub24tube01,ubuntu/noble/cloud,192.168.50.216,,,,,
-msllaub24ados01,ubuntu/noble/cloud,192.168.50.221,,,,,,
-msllaub24path01,ubuntu/noble/cloud,192.168.50.222,,,,,,
-msllaub22oliv01,ubuntu/jammy/cloud,192.168.50.223,,,,,,
-msllaub24immi01,ubuntu/noble/cloud,192.168.50.225,,,,,,
+msllaub24ados01,ubuntu/noble/cloud,192.168.50.221,,,,,
+msllaub24path01,ubuntu/noble/cloud,192.168.50.222,,,,,
+msllaub22oliv01,ubuntu/jammy/cloud,192.168.50.223,,,,,
+msllaub24smpe01,ubuntu/noble/cloud,192.168.50.225,semaphore,,,,
+msllaub24graf01,ubuntu/noble/cloud,192.168.50.217,grafana,,,,

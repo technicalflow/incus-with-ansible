@@ -1,0 +1,11 @@
+---
+admin_user: "admin"
+admin_password: "semaphorepassword"
+admin_email: "admin@example.com"
+semaphore_postgres_name: "semaphore"
+semaphore_postgres_user: "semaphore"
+semaphore_postgres_password: "dbpassword1"
+semaphore_port: 80
+pg_host: "192.168.50.219"
+pg_user: "postgres"
+pg_password: "mandarynka"

@@ -1,0 +1,126 @@
+---
+- name: Download Semaphore .deb package
+  ansible.builtin.get_url:
+    url: "https://github.com/semaphoreui/semaphore/releases/download/v2.19.12/semaphore_2.19.12_linux_amd64.deb"
+    dest: /tmp/semaphore.deb
+    mode: "0644"
+
+- name: Install Semaphore package
+  ansible.builtin.apt:
+    deb: /tmp/semaphore.deb
+
+- name: Install PostgreSQL client (used to prepare the Semaphore database)
+  ansible.builtin.apt:
+    name: postgresql-client
+    state: present
+    update_cache: true
+
+- name: Check if Semaphore database user exists
+  ansible.builtin.command:
+    cmd: >
+      psql -h {{ pg_host }} -U {{ pg_user }} -d postgres -tAc
+      "SELECT 1 FROM pg_roles WHERE rolname='{{ semaphore_postgres_user }}'"
+  environment:
+    PGPASSWORD: "{{ pg_password }}"
+  register: semaphore_pg_user_check
+  changed_when: false
+  no_log: true
+
+- name: Create Semaphore database user
+  ansible.builtin.command:
+    cmd: >
+      psql -h {{ pg_host }} -U {{ pg_user }} -d postgres
+      -v ON_ERROR_STOP=1 -v pw={{ semaphore_postgres_password | quote }} -f -
+    stdin: 'CREATE ROLE "{{ semaphore_postgres_user }}" WITH LOGIN PASSWORD :''pw'';'
+  environment:
+    PGPASSWORD: "{{ pg_password }}"
+  when: semaphore_pg_user_check.stdout | trim != '1'
+  changed_when: true
+  no_log: true
+
+- name: Check if Semaphore database exists
+  ansible.builtin.command:
+    cmd: >
+      psql -h {{ pg_host }} -U {{ pg_user }} -d postgres -tAc
+      "SELECT 1 FROM pg_database WHERE datname='{{ semaphore_postgres_name }}'"
+  environment:
+    PGPASSWORD: "{{ pg_password }}"
+  register: semaphore_pg_db_check
+  changed_when: false
+  no_log: true
+
+- name: Create Semaphore database
+  ansible.builtin.command:
+    cmd: >
+      psql -h {{ pg_host }} -U {{ pg_user }} -d postgres
+      -v ON_ERROR_STOP=1 -c
+      "CREATE DATABASE \"{{ semaphore_postgres_name }}\" OWNER \"{{ semaphore_postgres_user }}\""
+  environment:
+    PGPASSWORD: "{{ pg_password }}"
+  when: semaphore_pg_db_check.stdout | trim != '1'
+  changed_when: true
+  no_log: true
+
+- name: Create Semaphore configuration file
+  ansible.builtin.copy:
+    dest: /opt/config.json
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      {
+        "postgres": {
+          "host": "{{ pg_host }}",
+          "name": "{{ semaphore_postgres_name }}",
+          "user": "{{ semaphore_postgres_user }}",
+          "pass": "{{ semaphore_postgres_password }}"
+        },
+        "dialect": "postgres",
+        "port": "{{ semaphore_port }}",
+        "cookie_hash": "59hHSl5lwyiEqzl8SBzU4AFHEYuPkcY3XnEzP2RKI/0=",
+        "cookie_encryption": "KWFv4OBiswUZI5wYBYym4nQ3DPEul4vE9GC6rCxv3PU=",
+        "access_key_encryption": "gJe6VQL3OYAPAV3JUWlBj23aObnsSr7p54MblH3RHaM="
+      }
+
+- name: Create systemd service for Semaphore
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/semaphore.service
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Semaphore UI
+      Documentation=https://docs.semaphoreui.com
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      Type=simple
+      ExecReload=/bin/kill -HUP $MAINPID
+      ExecStart=/usr/bin/semaphore server --config /opt/config.json
+      SyslogIdentifier=semaphore
+      Restart=always
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Enable and start Semaphore service
+  ansible.builtin.systemd:
+    name: semaphore
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Create Semaphore admin user
+  ansible.builtin.command: >
+    semaphore user add --admin
+    --login "{{ admin_user }}"
+    --password "{{ admin_password }}"
+    --name "{{ admin_user }}"
+    --email "{{ admin_email }}"
+    --config /opt/config.json
+  register: admin_user
+  # Avoid failure on subsequent runs if the user already exists
+  failed_when: admin_user.rc != 0 and 'already exists' not in admin_user.stderr | lower
+  changed_when: admin_user.rc == 0
