@@ -6,6 +6,19 @@
 #   changed_when: false
 #   failed_when: cloud_init_status.rc not in [0, 2]
 
+# Stop automatic APT updates to prevent conflicts during package installation
+- name: Stop and disable automatic APT updates
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: true
+    masked: false
+  loop:
+    - apt-daily-upgrade.timer
+    - apt-daily.timer
+    - unattended-upgrades.service
+
 - name: Update apt cache and upgrade system packages
   ansible.builtin.apt:
     update_cache: yes
