@@ -89,7 +89,7 @@
 
 - name: Install MeTube systemd service
   ansible.builtin.copy:
-    dest: "/etc/systemd/system/{{ metube_service_name }}.service"
+    dest: "/etc/systemd/system/metube.service"
     owner: root
     group: root
     mode: '0644'
@@ -122,7 +122,7 @@
 
 - name: Ensure MeTube is enabled and running
   ansible.builtin.systemd:
-    name: "{{ metube_service_name }}"
+    name: "metube"
     enabled: true
     state: started
-    daemon_reload: true
+    # daemon_reload: true

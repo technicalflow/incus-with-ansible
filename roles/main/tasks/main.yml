@@ -83,7 +83,11 @@
     regexp: "^#?PasswordAuthentication"
     line: "PasswordAuthentication yes"
     state: present
-  notify: Restart ssh
+
+- name: Restart ssh
+  ansible.builtin.service:
+    name: ssh
+    state: restarted
 
 - name: Ensure SSH service is enabled and running
   ansible.builtin.systemd:

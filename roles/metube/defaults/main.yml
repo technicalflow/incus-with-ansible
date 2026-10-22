@@ -3,4 +3,3 @@ metube_install_dir: /opt/metube
 metube_download_dir: /movies
 metube_repository: https://github.com/alexta69/metube.git
 metube_node_setup_url: https://deb.nodesource.com/setup_22.x
-metube_service_name: metube
