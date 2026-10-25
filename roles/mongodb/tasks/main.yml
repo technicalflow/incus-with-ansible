@@ -48,7 +48,63 @@
     mode: '0755'
     recurse: yes
     state: directory
-    
+
+- name: Ensure MongoDB is running for administrator bootstrap
+  ansible.builtin.systemd:
+    name: mongod
+    state: started
+
+- name: Require a MongoDB administrator password
+  ansible.builtin.assert:
+    that:
+      - mongodb_admin_password | length > 0
+    fail_msg: >-
+      Set mongodb_admin_password with Ansible Vault or an extra variable before
+      running the MongoDB role.
+
+- name: Check whether MongoDB authorization is already enabled
+  ansible.builtin.shell:
+    cmd: "grep -Eq '^\\s*authorization:\\s*enabled\\s*$' /etc/mongod.conf"
+  register: mongodb_authorization_check
+  changed_when: false
+  failed_when: false
+
+- name: Create MongoDB administrator
+  ansible.builtin.shell:
+    cmd: |
+      mongosh --quiet --host 127.0.0.1 {% if mongodb_authorization_check.rc == 0 %}--username "$MONGODB_ADMIN_USER" --password "$MONGODB_ADMIN_PASSWORD" --authenticationDatabase admin {% endif %}admin
+  args:
+    stdin: |
+      const username = process.env.MONGODB_ADMIN_USER;
+      const password = process.env.MONGODB_ADMIN_PASSWORD;
+      if (!db.getUser(username)) {
+        db.createUser({user: username, pwd: password, roles: [{role: "root", db: "admin"}]});
+        print("created");
+      }
+  environment:
+    MONGODB_ADMIN_USER: "{{ mongodb_admin_user }}"
+    MONGODB_ADMIN_PASSWORD: "{{ mongodb_admin_password }}"
+  register: mongodb_admin_result
+  changed_when: "'created' in mongodb_admin_result.stdout"
+  no_log: true
+
+- name: Enable MongoDB authorization
+  ansible.builtin.blockinfile:
+    path: /etc/mongod.conf
+    marker: "# {mark} ANSIBLE MANAGED MONGODB AUTHORIZATION"
+    block: |
+      security:
+        authorization: enabled
+  notify: Restart MongoDB
+
+- name: Configure MongoDB to listen on all interfaces
+  ansible.builtin.lineinfile:
+    path: /etc/mongod.conf
+    regexp: '^(\s*bindIp:\s*)127\.0\.0\.1\s*$'
+    line: '\g<1>0.0.0.0'
+    backrefs: yes
+  notify: Restart MongoDB
+
 # -------------------------------------------------------------------------
 # 3. Service Management
 # -------------------------------------------------------------------------

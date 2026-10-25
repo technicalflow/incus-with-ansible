@@ -1,11 +1,8 @@
 # Incus Container Provisioning with Ansible
-
 This project automates the creation, network configuration, and service deployment of Incus containers using Ansible and a simple CSV-based inventory.
-
 ---
 
 ## Overview
-
 The setup allows you to declaratively define containers in `incus.csv`. When you run the playbook:
 
 1. **Discovery & Creation**: Reads `incus.csv`, verifies which containers already exist on the host, creates missing containers using Incus (`macvlan` profile), mounts host storage paths, and starts them.
@@ -15,9 +12,7 @@ The setup allows you to declaratively define containers in `incus.csv`. When you
 
 ---
 
-
 ## Configuration
-
 ### 1. Container Definitions (`incus.csv`)
 
 Add or modify rows in `incus.csv` to specify your containers:
@@ -39,25 +34,31 @@ Adjust default values such as:
 - `admin_user`: Default container admin account name (e.g. `madmin`).
 - `admin_password_hash`: Password hash for the admin account (for password: mandarynka).
 - `gateway`: Default network gateway for the containers.
-- `host_admin_user`: Incus host admin user required only to provision Incus with system role.
+- `host_admin_user`: Incus host admin user used by the `system` role when provisioning Incus.
+
+Role-specific variables and secret overrides are defined in each role's `defaults/main.yml`.
 
 ---
 
 ## Available Roles
-
 - **`main`**: Applies to all containers. Performs `apt upgrade`, sets locale (`pl_PL.UTF-8`) and timezone (`Europe/Warsaw`), provisions admin user with passwordless sudo and SSH key, and configures static IP with Netplan.
 - **`vscode`**: Deploys Code-Server on port 80, along with developer tooling (Azure CLI, PowerShell + Az module, Terraform, Ansible-core, Docker CLI).
 - **`postgres`**: Installs PostgreSQL and automated `pgAdmin 4` web interface.
 - **`mariadb`**: Installs MariaDB server, sets root password, creates initial database and user.
-- **`mongodb`**: Configures MongoDB APT repository and starts the `mongod` service.
+- **`mongodb`**: Configures MongoDB APT repository, creates an administrator using
+  `admin_user`, enables authorization, and starts the `mongod` service. Override
+  `mongodb_admin_password` through Ansible Vault or an extra variable when needed.
 - **`jellyfin`**: Installs and enables the Jellyfin media server and prepares `/data`.
 - **`syslog`**: Deploys `syslog-ng` listening on UDP 514 with UFW rules and Mikrotik syslog parsers.
-- **`system`**: Host-level preparation role (installs Incus packages and creates `macvlan` profile).
+- **`metube`**: Deploys MeTube for downloading media.
+- **`ados`**: Provisions the ADOS service.
+- **`semaphore`**: Deploys Ansible Semaphore.
+- **`grafana`**: Deploys Grafana.
+- **`system`**: Host-level preparation role (installs Incus packages and creates `macvlan` profile). Its play is commented out in `playbook.yml`; uncomment it when host provisioning is required.
 
 ---
 
 ## Prerequisites
-
 - **Incus**: Incus installed and running on the host.
 - **Network Profile**: An Incus profile named `macvlan` (can be created using `roles/system`).
 - **Ansible Collections**:
@@ -69,11 +70,10 @@ Adjust default values such as:
 ---
 
 ## Usage
-
 Run the playbook from this directory:
 
 ```bash
 ansible-playbook playbook.yml
 ```
 
-> **Note**: Existing containers are automatically detected and skipped during the creation stage, making subsequent runs safe when adding new entries to `incus.csv`.
+> **Note**: Existing containers are automatically detected and skipped during both the creation and dynamic-inventory stages. They are not reconfigured or provisioned by this playbook run; entries added to `incus.csv` are intended for new containers.
