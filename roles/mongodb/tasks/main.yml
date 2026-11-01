@@ -95,7 +95,7 @@
     block: |
       security:
         authorization: enabled
-  notify: Restart MongoDB
+  # notify: Restart MongoDB
 
 - name: Configure MongoDB to listen on all interfaces
   ansible.builtin.lineinfile:
