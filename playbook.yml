@@ -76,6 +76,18 @@
       loop: "{{ incus_data.list }}"
       when: item.CONTAINERNAME not in existing_containers
 
+- name: Add container boot autostart delay
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Set boot autostart delay for containers
+      ansible.builtin.command:
+        cmd: incus config set {{ item.CONTAINERNAME }} boot.autostart.delay={{ item.DELAY | trim }}
+      loop: "{{ incus_data.list }}"
+      loop_control:
+        loop_var: item
+      when: item.DELAY | default('', true) | trim | length > 0
+
 - name: Install container roles
   hosts: incus_containers
   serial: 1
@@ -88,3 +100,4 @@
       ansible.builtin.include_role:
         name: "{{ container_role }}"
       when: container_role | length > 0
+
