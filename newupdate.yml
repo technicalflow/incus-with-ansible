@@ -1,0 +1,50 @@
+---
+# ==========================================================
+# PLAY 1: Find running containers and build the inventory
+# ==========================================================
+- name: Discover running Incus containers
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  tasks:
+    - name: Fetch list of running containers
+      ansible.builtin.command: incus list type=container status=running -c n --format csv
+      register: incus_containers
+      changed_when: false
+
+    - name: Add containers to dynamic in-memory group
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        groups: incus_running
+        ansible_connection: community.general.incus
+        ansible_user: root
+      loop: "{{ incus_containers.stdout_lines }}"
+
+
+# ==========================================================
+# PLAY 2: Run the updates against the discovered containers
+# ==========================================================
+- name: Update all running Incus containers
+  hosts: incus_running
+  serial: 1  # <==== Updates them sequentially
+  gather_facts: yes
+  become: false # assuming you are already root via incus connection plugin
+  
+  tasks:
+    - name: Update apt cache and upgrade packages (Debian/Ubuntu)
+      ansible.builtin.apt:
+        update_cache: yes
+        upgrade: dist
+      when: ansible_os_family == "Debian"
+
+    - name: Update packages (RHEL/CentOS/Alma/Rocky)
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+      when: ansible_os_family == "RedHat"
+
+    - name: Update packages (Alpine)
+      community.general.apk:
+        update_cache: yes
+        upgrade: yes
+      when: ansible_os_family == "Alpine"
