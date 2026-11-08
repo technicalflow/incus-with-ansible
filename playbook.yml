@@ -60,6 +60,7 @@
           {%- if not loop.last -%},{%- endif -%}
           {%- endfor -%}]
         media_devices: "{{ _media_json }}"
+        security_nested: "{{ (container_item.NESTED | default('', true) | trim | lower) == 'true' }}"
       loop: "{{ incus_data.list }}"
       loop_control:
         loop_var: container_item
@@ -100,4 +101,3 @@
       ansible.builtin.include_role:
         name: "{{ container_role }}"
       when: container_role | length > 0
-

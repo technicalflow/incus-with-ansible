@@ -2,6 +2,10 @@
 docker_version: "29.8.1"
 ubuntu_version: "24.04"
 ubuntu_codename: "noble"
+# Firewall (ufw)
+fw_lan_cidr: "192.168.0.0/16"
+fw_gateway: "{{ gateway }}"
+fw_ssh_allow_from: "192.168.50.0/23"
 base_packages:
   - dialog
   - zip
@@ -14,3 +18,4 @@ base_packages:
   - software-properties-common
   - ca-certificates
   - lsb-release
+  - ufw

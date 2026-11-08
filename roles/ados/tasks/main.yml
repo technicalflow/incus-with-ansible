@@ -101,3 +101,101 @@
     mode: "0755"
     creates: /usr/local/bin/docker
   become: true
+
+# -------------------------------------------------------------------------
+# 9. Firewall (ufw) - keep last so provisioning is not blocked
+# -------------------------------------------------------------------------
+# Rule order matters: gateway allows must precede the LAN deny.
+# - name: Install ufw
+#   ansible.builtin.apt:
+#     name: ufw
+#     state: present
+
+- name: Allow outbound DNS and DHCP to gateway
+  community.general.ufw:
+    rule: allow
+    direction: out
+    proto: "{{ item.proto }}"
+    to_ip: "{{ fw_gateway }}"
+    to_port: "{{ item.port }}"
+  loop:
+    - { proto: udp, port: "53" }
+    - { proto: tcp, port: "53" }
+    - { proto: udp, port: "67" }
+
+- name: Allow inbound DHCP replies from gateway
+  community.general.ufw:
+    rule: allow
+    direction: in
+    proto: udp
+    from_ip: "{{ fw_gateway }}"
+    to_port: "68"
+
+- name: Allow inbound SSH from admin subnet
+  community.general.ufw:
+    rule: allow
+    direction: in
+    proto: tcp
+    from_ip: "{{ fw_ssh_allow_from }}"
+    to_port: "22"
+
+- name: Deny all other outbound traffic to LAN
+  community.general.ufw:
+    rule: deny
+    direction: out
+    to_ip: "{{ fw_lan_cidr }}"
+
+- name: Set default policy deny incoming
+  community.general.ufw:
+    direction: incoming
+    default: deny
+
+- name: Set default policy allow outgoing (internet)
+  community.general.ufw:
+    direction: outgoing
+    default: allow
+
+- name: Enable ufw
+  community.general.ufw:
+    state: enabled
+
+- name: Download and dearmor Docker APT repository GPG key
+  ansible.builtin.shell: |
+    curl -fsSL "https://download.docker.com/linux/ubuntu/gpg" \
+      | gpg --dearmor --yes -o /etc/apt/keyrings/docker-apt-keyring.gpg
+  args:
+    creates: /etc/apt/keyrings/docker-apt-keyring.gpg
+
+# Kubernetes >= v1.36 requires containerd 2.x; Ubuntu 24.04 ships 1.7.
+- name: Add Docker APT repository (containerd.io)
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/docker.list
+    content: |
+      deb [signed-by=/etc/apt/keyrings/docker-apt-keyring.gpg] https://download.docker.com/linux/ubuntu {{ ansible_facts.distribution_release }} stable
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Check if buildx builder exists
+  ansible.builtin.command: docker buildx inspect multiarch
+  register: buildx_builder
+  changed_when: false
+  failed_when: false
+
+- name: Create multiarch buildx builder
+  ansible.builtin.command: >
+    docker buildx create --name multiarch
+    --driver docker-container --bootstrap --use
+  when: buildx_builder.rc != 0
+
+- name: Select multiarch builder
+  ansible.builtin.command: docker buildx use multiarch
+  changed_when: false
+
+- name: Inspect builder (bootstrap)
+  ansible.builtin.command: docker buildx inspect --bootstrap
+  changed_when: false
+
+- name: Inspect buildkit image manifest
+  ansible.builtin.command: docker buildx imagetools inspect moby/buildkit:buildx-stable-1
+  changed_when: false

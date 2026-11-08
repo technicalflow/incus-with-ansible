@@ -42,6 +42,12 @@
   when: device_item.name not in (incus_devices.stdout | from_yaml | default({}, true) | dict2items | map(attribute='key') | list)
   changed_when: true
 
+- name: Enable security.nested (needed for Docker/Podman/LXC inside)
+  ansible.builtin.command:
+    cmd: "incus config set {{ container_name }} security.nested=true"
+  when: security_nested | bool
+  changed_when: true
+
 - name: Start Incus container
   ansible.builtin.command:
     cmd: "incus start {{ container_name }}"

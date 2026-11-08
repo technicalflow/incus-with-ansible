@@ -18,15 +18,16 @@
     - apt-daily-upgrade.timer
     - apt-daily.timer
     - unattended-upgrades.service
+  when: ansible_os_family == "Debian"
 
 - name: Update apt cache and upgrade system packages
-  ansible.builtin.apt:
+  ansible.builtin.package:
     update_cache: yes
     cache_valid_time: 3600
     upgrade: dist
 
 - name: Install required system packages
-  ansible.builtin.apt:
+  ansible.builtin.package:
     name: "{{ packages_to_install }}"
     state: present
 
@@ -111,6 +112,7 @@
 - name: Delete existing Netplan configurations
   ansible.builtin.shell: rm -f /etc/netplan/*.yaml
   changed_when: false
+  when: ansible_os_family == "Debian"
 
 - name: Configure static network via Netplan
   ansible.builtin.copy:
@@ -135,11 +137,12 @@
     group: root
     mode: "0600"
   register: netplan_config
+  when: ansible_os_family == "Debian"
 
 - name: Apply Netplan static network configuration
   ansible.builtin.command:
     cmd: netplan apply
-  when: netplan_config.changed
+  when: netplan_config.changed and ansible_os_family == "Debian"
 
 - name: Execute touch command marker (/tmp/done)
   ansible.builtin.file:

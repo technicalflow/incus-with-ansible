@@ -1,8 +1,8 @@
 ---
 - name: Check if incus service is installed
-  ansible.builtin.command: dpkg-query -W -f='${Status}' incus
+  ansible.builtin.command: dpkg-query -W -f='${db:Status-Status}' incus
   register: incus_check
-  failed_when: incus_check.rc != 0
+  failed_when: false
   changed_when: false
 
 - name: Ensure Incus is installed
@@ -12,50 +12,74 @@
       - incus-extra
     state: present
     update_cache: yes
-  when: incus_check.rc != 0
+  when: incus_check.stdout | trim != 'installed'
 
-- name: Add admin user to incus groups
-  ansible.builtin.user:
-    name: "{{ host_admin_user }}"
-    groups: incus,incus-admin
-    append: yes
-
-- name: Check if macvlan profile exists
-  ansible.builtin.command:
-    cmd: incus profile list --format json
-  register: profile_check
-  failed_when: profile_check.rc != 0
+- name: Wait for the Incus daemon
+  ansible.builtin.command: incus admin waitready
   changed_when: false
 
-- name: Create macvlan profile if it does not exist
-  ansible.builtin.command: incus profile create macvlan
-  when: >-
-    'macvlan' not in (
-      profile_check.stdout | from_json | map(attribute='name') | list
-    )
+- name: Check whether Incus is initialized
+  ansible.builtin.command:
+    cmd: incus profile list --format json
+  register: incus_initialization_check
+  failed_when: false
+  changed_when: false
 
-- name: Apply macvlan profile configuration
-  vars:
-    macvlan_profile: |
+- name: Initialize Incus with the predefined configuration
+  ansible.builtin.command:
+    cmd: incus admin init --preseed
+    stdin: |
       config:
-        limits.cpu: "2"
-        limits.memory: 2GB
-        limits.memory.enforce: soft
-        limits.memory.swap: "false"
-      description: Macvlan profile
-      devices:
-        eth0:
-          name: eth0
-          nictype: macvlan
-          parent: eth0
-          type: nic
-        root:
-          path: /
-          pool: default
-          type: disk
-      name: macvlan
-      used_by: []
-      project: default
+        core.https_address: "{{ ansible_default_ipv4.address }}:8443"
+      storage_pools:
+        - name: default
+          driver: dir
+      networks:
+        - name: incusbr0
+          type: bridge
+          config:
+            ipv4.address: "172.30.20.1/24"
+            ipv4.nat: "true"
+            ipv6.address: "fd40:cafe::1/64"
+            ipv6.nat: "true"
+      profiles:
+        - config: {}
+          name: default
+          description: Default profile
+          devices:
+            eth0:
+              name: eth0
+              network: incusbr0
+              type: nic
+            root:
+              path: /
+              pool: default
+              type: disk
+        - config:
+            limits.cpu: "2"
+            limits.memory: 4GB
+            limits.memory.enforce: soft
+            limits.memory.swap: "false"
+          description: Macvlan profile
+          devices:
+            eth0:
+              name: eth0
+              nictype: bridged
+              parent: eth0
+              type: nic
+            root:
+              path: /
+              pool: default
+              type: disk
+          name: macvlan
+      cluster:
+        server_name: "{{ inventory_hostname }}"
+        enabled: {{ "false" | bool | lower }}
+  when: incus_initialization_check.rc != 0
+  changed_when: true
 
-  ansible.builtin.shell: |
-    echo '{{ macvlan_profile }}' | incus profile edit macvlan
+- name: Add admin user to Incus groups
+  ansible.builtin.user:
+    name: "{{ admin_user }}"
+    groups: incus,incus-admin
+    append: true

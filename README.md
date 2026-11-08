@@ -27,6 +27,8 @@ Add or modify rows in `incus.csv` to specify your containers:
 | `MEDIA_DEVICES_SOURCE`| Host source directory paths | `/data/Backup/pgsql` |
 | `MEDIA_DEVICES_PATH`  | Target path inside the container | `/var/lib/postgresql` |
 | `MEDIA_DEVICES_READONLY` | Read-only flag (`true` or `false`) | `false\|false` |
+| `DELAY` | Optional `boot.autostart.delay` in seconds | `20` |
+| `NESTED` | `true` enables `security.nested` (e.g. Docker inside); `false` or blank = off | `true` |
 
 ### 2. Global Variables (`group_vars/all.yml`)
 
@@ -54,13 +56,13 @@ Role-specific variables and secret overrides are defined in each role's `default
 - **`ados`**: Provisions the ADOS service.
 - **`semaphore`**: Deploys Ansible Semaphore.
 - **`grafana`**: Deploys Grafana.
-- **`system`**: Host-level preparation role (installs Incus packages and creates `macvlan` profile). Its play is commented out in `playbook.yml`; uncomment it when host provisioning is required.
+- **`system`**: Host-level preparation role. It installs Incus when needed, initializes an unprovisioned Incus daemon with the default storage pool and network, and creates or reconciles the `macvlan` profile.
 
 ---
 
 ## Prerequisites
-- **Incus**: Incus installed and running on the host.
-- **Network Profile**: An Incus profile named `macvlan` (can be created using `roles/system`).
+- **Incus**: The playbook installs Incus and waits for its daemon.
+- **Network Profile**: The `system` role creates or reconciles the `macvlan` profile.
 - **Ansible Collections**:
   ```bash
   ansible-galaxy collection install community.general ansible.posix community.mysql
@@ -76,4 +78,4 @@ Run the playbook from this directory:
 ansible-playbook playbook.yml
 ```
 
-> **Note**: Existing containers are automatically detected and skipped during both the creation and dynamic-inventory stages. They are not reconfigured or provisioned by this playbook run; entries added to `incus.csv` are intended for new containers.
+> **Note**: Incus host provisioning is idempotent. Existing containers are automatically detected and skipped during both the creation and dynamic-inventory stages; they are not reconfigured or provisioned by this playbook run.
