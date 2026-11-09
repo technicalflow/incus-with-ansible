@@ -5,14 +5,43 @@
   failed_when: false
   changed_when: false
 
+- name: Ensure /etc/apt/keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: incus_check.stdout | trim != 'installed' and ansible_distribution == "Ubuntu" or ansible_distribution == "Debian"
+
+- name: Download Incus official GPG key
+  ansible.builtin.get_url:
+    url: https://pkgs.zabbly.com/key.asc
+    dest: /etc/apt/keyrings/zabbly.asc
+    owner: root
+    group: root
+    mode: "0644"
+    force: false
+  when: incus_check.stdout | trim != 'installed' and ansible_distribution == "Ubuntu" or ansible_distribution == "Debian"
+
+- name: Configure Incus official APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/zabbly.asc] https://pkgs.zabbly.com/incus/lts-7.0 {{ ansible_distribution_release }} main"
+    filename: zabbly
+    state: present
+  when: incus_check.stdout | trim != 'installed' and ansible_distribution == "Ubuntu" or ansible_distribution == "Debian"
+
 - name: Ensure Incus is installed
   ansible.builtin.apt:
     name:
       - incus
-      - incus-extra
+      - incus-client
+      - lxcfs
+      - criu
+      - uidmap
     state: present
     update_cache: yes
-  when: incus_check.stdout | trim != 'installed'
+  when: incus_check.stdout | trim != 'installed' and ansible_distribution == "Ubuntu" or ansible_distribution == "Debian"
 
 - name: Wait for the Incus daemon
   ansible.builtin.command: incus admin waitready
@@ -58,7 +87,7 @@
         - config:
             limits.cpu: "2"
             limits.memory: 4GB
-            limits.memory.enforce: soft
+          #  limits.memory.enforce: soft
             limits.memory.swap: "false"
           description: Macvlan profile
           devices:
