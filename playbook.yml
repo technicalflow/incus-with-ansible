@@ -10,18 +10,28 @@
   hosts: localhost
   gather_facts: false
   tasks:
-    - name: Check if controller SSH public key exists
-      ansible.builtin.stat:
-        path: /home/madmin/.ssh/ansible.pub
-      register: ansible_pub_stat
-      changed_when: false
+    - name: Ensure SSH directory exists
+      ansible.builtin.file:
+        path: "/home/{{ admin_user }}/.ssh"
+        state: directory
+        owner: "{{ admin_user }}"
+        group: "{{ admin_user }}"
+        mode: "0700"
+      become: true
 
-    - name: Copy controller SSH public key to ./roles/main/files/ansible.pub
-      ansible.builtin.copy:
-        src: /home/madmin/.ssh/ansible.pub
-        dest: ./roles/main/files/ansible.pub
-        mode: "0644"
-      when: ansible_pub_stat.stat.exists
+    - name: Generate RSA SSH key if it does not exist
+      ansible.builtin.command:
+        argv:
+          - ssh-keygen
+          - -t
+          - rsa
+          - -N
+          - ""
+          - -f
+          - "/home/{{ admin_user }}/.ssh/id_rsa"
+        creates: "/home/{{ admin_user }}/.ssh/id_rsa"
+      become: true
+      become_user: "{{ admin_user }}"
 
     - name: Read incus.csv
       community.general.read_csv:
@@ -60,7 +70,7 @@
           {"name":"{{ names[i] }}","source":"{{ sources[i] }}","path":"{{ paths[i] }}","readonly":"{{ readonlys[i] | default('true') }}"}
           {%- if not loop.last -%},{%- endif -%}
           {%- endfor -%}]
-        media_devices: "{{ _media_json }}"
+        media_devices: "{{ _media_json | from_json }}"
         security_nested: "{{ (container_item.NESTED | default('', true) | trim | lower) == 'true' }}"
       loop: "{{ incus_data.list }}"
       loop_control:

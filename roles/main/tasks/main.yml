@@ -80,7 +80,7 @@
   ansible.posix.authorized_key:
     user: "{{ admin_user }}"
     state: present
-    key: "{{ lookup('file', '../files/ansible.pub') }}"
+    key: "{{ lookup('file', '/home/' ~ admin_user ~ '/.ssh/id_rsa.pub') }}"
 
 - name: Configure passwordless sudo for admin user
   ansible.builtin.copy:

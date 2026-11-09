@@ -100,7 +100,7 @@
             eth0:
               name: eth0
               nictype: bridged
-              parent: eth0
+              parent: br0
               type: nic
             root:
               path: /
@@ -119,3 +119,26 @@
     groups: incus,incus-admin
     append: true
   when: admin_user is defined
+
+# - name: Ensure SSH directory exists
+#   ansible.builtin.file:
+#     path: /home/"{{ admin_user }}"/.ssh
+#     state: directory
+#     owner: "{{ admin_user }}"
+#     group: "{{ admin_user }}"
+#     mode: "0700"
+#   become: true
+
+# - name: Generate RSA SSH key if it does not exist
+#   ansible.builtin.command:
+#     argv:
+#       - ssh-keygen
+#       - -t
+#       - rsa
+#       - -N
+#       - ""
+#       - -f
+#       - /home/"{{ admin_user }}"/.ssh/id_rsa
+#     creates: /home/"{{ admin_user }}"/.ssh/id_rsa
+#   become: true
+#   become_user: "{{ admin_user }}"

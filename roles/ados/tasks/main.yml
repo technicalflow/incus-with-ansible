@@ -87,20 +87,74 @@
 - name: Install Az PowerShell module
   ansible.builtin.command: pwsh -c 'Install-Module Az -Scope AllUsers -Force'
 
-- name: Download and install Docker CLI binary
-  ansible.builtin.unarchive:
-    src: "https://download.docker.com/linux/static/stable/x86_64/docker-{{ docker_version }}.tgz"
-    dest: /usr/local/bin/
-    remote_src: true
-    include:
-      - docker/docker
-    extra_opts:
-      - --strip-components=1
+# -------------------------------------------------------------------------
+# 8. Docker Engine and Buildx CLI plugin
+# -------------------------------------------------------------------------
+
+- name: Download and dearmor Docker APT repository GPG key
+  ansible.builtin.shell: |
+    curl -fsSL "https://download.docker.com/linux/ubuntu/gpg" \
+      | gpg --dearmor --yes -o /etc/apt/keyrings/docker-apt-keyring.gpg
+  args:
+    creates: /etc/apt/keyrings/docker-apt-keyring.gpg
+
+- name: Add Docker APT repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/docker.list
+    content: |
+      deb [signed-by=/etc/apt/keyrings/docker-apt-keyring.gpg] https://download.docker.com/linux/ubuntu {{ ansible_facts.distribution_release }} stable
     owner: root
     group: root
-    mode: "0755"
-    creates: /usr/local/bin/docker
-  become: true
+    mode: "0644"
+
+# - name: Download and install Docker CLI binary
+#   ansible.builtin.unarchive:
+#     src: "https://download.docker.com/linux/static/stable/x86_64/docker-{{ docker_version }}.tgz"
+#     dest: /usr/local/bin/
+#     remote_src: true
+#     include:
+#       - docker/docker
+#     extra_opts:
+#       - --strip-components=1
+#     owner: root
+#     group: root
+#     mode: "0755"
+#     creates: /usr/local/bin/docker
+#   become: true
+
+- name: Install Docker Engine and Buildx CLI plugin
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: true
+  loop:
+    - docker-buildx-plugin
+    - docker-ce
+    - docker-ce-cli
+
+- name: Check if buildx builder exists
+  ansible.builtin.command: docker buildx inspect multiarch
+  register: buildx_builder
+  changed_when: false
+  failed_when: false
+
+- name: Create multiarch buildx builder
+  ansible.builtin.command: >
+    docker buildx create --name multiarch
+    --driver docker-container --bootstrap --use
+  when: buildx_builder.rc != 0
+
+- name: Select multiarch builder
+  ansible.builtin.command: docker buildx use multiarch
+  changed_when: false
+
+- name: Inspect builder (bootstrap)
+  ansible.builtin.command: docker buildx inspect --bootstrap
+  changed_when: false
+
+- name: Inspect buildkit image manifest
+  ansible.builtin.command: docker buildx imagetools inspect moby/buildkit:buildx-stable-1
+  changed_when: false
 
 # -------------------------------------------------------------------------
 # 9. Firewall (ufw) - keep last so provisioning is not blocked
@@ -158,44 +212,3 @@
 - name: Enable ufw
   community.general.ufw:
     state: enabled
-
-- name: Download and dearmor Docker APT repository GPG key
-  ansible.builtin.shell: |
-    curl -fsSL "https://download.docker.com/linux/ubuntu/gpg" \
-      | gpg --dearmor --yes -o /etc/apt/keyrings/docker-apt-keyring.gpg
-  args:
-    creates: /etc/apt/keyrings/docker-apt-keyring.gpg
-
-# Kubernetes >= v1.36 requires containerd 2.x; Ubuntu 24.04 ships 1.7.
-- name: Add Docker APT repository (containerd.io)
-  ansible.builtin.copy:
-    dest: /etc/apt/sources.list.d/docker.list
-    content: |
-      deb [signed-by=/etc/apt/keyrings/docker-apt-keyring.gpg] https://download.docker.com/linux/ubuntu {{ ansible_facts.distribution_release }} stable
-    owner: root
-    group: root
-    mode: "0644"
-
-- name: Check if buildx builder exists
-  ansible.builtin.command: docker buildx inspect multiarch
-  register: buildx_builder
-  changed_when: false
-  failed_when: false
-
-- name: Create multiarch buildx builder
-  ansible.builtin.command: >
-    docker buildx create --name multiarch
-    --driver docker-container --bootstrap --use
-  when: buildx_builder.rc != 0
-
-- name: Select multiarch builder
-  ansible.builtin.command: docker buildx use multiarch
-  changed_when: false
-
-- name: Inspect builder (bootstrap)
-  ansible.builtin.command: docker buildx inspect --bootstrap
-  changed_when: false
-
-- name: Inspect buildkit image manifest
-  ansible.builtin.command: docker buildx imagetools inspect moby/buildkit:buildx-stable-1
-  changed_when: false

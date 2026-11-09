@@ -44,7 +44,7 @@
 
 - name: Enable security.nested (needed for Docker/Podman/LXC inside)
   ansible.builtin.command:
-    cmd: "incus config set {{ container_name }} security.nested=true"
+    cmd: "incus config set {{ container_name }} security.nesting=true"
   when: security_nested | bool
   changed_when: true
 

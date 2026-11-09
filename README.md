@@ -28,7 +28,7 @@ Add or modify rows in `incus.csv` to specify your containers:
 | `MEDIA_DEVICES_PATH`  | Target path inside the container | `/var/lib/postgresql` |
 | `MEDIA_DEVICES_READONLY` | Read-only flag (`true` or `false`) | `false\|false` |
 | `DELAY` | Optional `boot.autostart.delay` in seconds | `20` |
-| `NESTED` | `true` enables `security.nested` (e.g. Docker inside); `false` or blank = off | `true` |
+| `NESTED` | `true` enables `security.nesting` (e.g. Docker inside); `false` or blank = off | `true` |
 
 ### 2. Global Variables (`group_vars/all.yml`)
 
@@ -67,15 +67,37 @@ Role-specific variables and secret overrides are defined in each role's `default
   ```bash
   ansible-galaxy collection install community.general ansible.posix community.mysql
   ```
-- **SSH Key**: Controller public key at `/home/madmin/.ssh/ansible.pub` (copied to containers during setup).
+- **SSH Key**: The controller generates `/home/<admin_user>/.ssh/id_rsa` when
+  missing. Its public key is added to the admin user's `authorized_keys` in each
+  provisioned container.
 
 ---
 
 ## Usage
-Run the playbook from this directory:
+Run the playbooks from this directory.
+
+### Provision the Incus host
+
+`system.yml` contains the host-level Incus provisioning tasks. It installs Incus when
+needed, waits for the daemon, initializes Incus, and configures the storage pool,
+network, and `macvlan` profile.
+
+### Create and provision containers
+
+`playbook.yml` reads `incus.csv`, creates missing containers, and provisions them
+with the roles selected by the `ROLE` column:
 
 ```bash
 ansible-playbook playbook.yml
+```
+
+### Update all running containers
+
+`newupdate.yml` discovers running Incus containers and updates them sequentially.
+It supports Debian/Ubuntu, RHEL-based, and Alpine containers:
+
+```bash
+ansible-playbook newupdate.yml
 ```
 
 > **Note**: Incus host provisioning is idempotent. Existing containers are automatically detected and skipped during both the creation and dynamic-inventory stages; they are not reconfigured or provisioned by this playbook run.
