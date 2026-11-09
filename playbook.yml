@@ -32,6 +32,7 @@
       ansible.builtin.command:
         cmd: incus list --format json
       register: incus_list
+      become: true
       changed_when: false
 
     - name: Set list of existing containers

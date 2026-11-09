@@ -54,6 +54,12 @@
   failed_when: false
   changed_when: false
 
+- name: Check whether macvlan profile exists
+  ansible.builtin.command: incus profile show macvlan
+  register: incus_profile_check
+  failed_when: false
+  changed_when: false
+
 - name: Initialize Incus with the predefined configuration
   ansible.builtin.command:
     cmd: incus admin init --preseed
@@ -104,7 +110,7 @@
       cluster:
         server_name: "{{ inventory_hostname }}"
         enabled: {{ "false" | bool | lower }}
-  when: incus_initialization_check.rc != 0
+  when: incus_profile_check.rc != 0
   changed_when: true
 
 - name: Add admin user to Incus groups
@@ -112,3 +118,4 @@
     name: "{{ admin_user }}"
     groups: incus,incus-admin
     append: true
+  when: admin_user is defined
