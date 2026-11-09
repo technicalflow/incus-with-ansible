@@ -63,6 +63,12 @@
     force: true
   register: metube_checkout
 
+- name: Set MeTube web port to 80
+  ansible.builtin.replace:
+    path: "{{ metube_install_dir }}/app/main.py"
+    regexp: "8081"
+    replace: "80"
+
 - name: Install frontend dependencies and build UI
   ansible.builtin.shell: |
     npm install

@@ -1,144 +1,149 @@
 ---
-- name: Check if incus service is installed
-  ansible.builtin.command: dpkg-query -W -f='${db:Status-Status}' incus
-  register: incus_check
-  failed_when: false
-  changed_when: false
+- name: Prepare the system for Incus installation and install Incus
+  hosts: localhost
+  gather_facts: true
+  become: true
+  tasks:
+    - name: Check if incus service is installed
+      ansible.builtin.command: dpkg-query -W -f='${db:Status-Status}' incus
+      register: incus_check
+      failed_when: false
+      changed_when: false
 
-- name: Ensure /etc/apt/keyrings directory exists
-  ansible.builtin.file:
-    path: /etc/apt/keyrings
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-  when: incus_check.stdout | trim != 'installed' and ansible_distribution == "Ubuntu" or ansible_distribution == "Debian"
+    - name: Ensure /etc/apt/keyrings directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: incus_check.stdout | trim != 'installed' and ansible_distribution == "Debian"
 
-- name: Download Incus official GPG key
-  ansible.builtin.get_url:
-    url: https://pkgs.zabbly.com/key.asc
-    dest: /etc/apt/keyrings/zabbly.asc
-    owner: root
-    group: root
-    mode: "0644"
-    force: false
-  when: incus_check.stdout | trim != 'installed' and ansible_distribution == "Ubuntu" or ansible_distribution == "Debian"
+    - name: Download Incus official GPG key
+      ansible.builtin.get_url:
+        url: https://pkgs.zabbly.com/key.asc
+        dest: /etc/apt/keyrings/zabbly.asc
+        owner: root
+        group: root
+        mode: "0644"
+        force: false
+      when: incus_check.stdout | trim != 'installed' and ansible_distribution == "Debian"
 
-- name: Configure Incus official APT repository
-  ansible.builtin.apt_repository:
-    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/zabbly.asc] https://pkgs.zabbly.com/incus/lts-7.0 {{ ansible_distribution_release }} main"
-    filename: zabbly
-    state: present
-  when: incus_check.stdout | trim != 'installed' and ansible_distribution == "Ubuntu" or ansible_distribution == "Debian"
+    - name: Configure Incus official APT repository
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/zabbly.asc] https://pkgs.zabbly.com/incus/lts-7.0 {{ ansible_distribution_release }} main"
+        filename: zabbly
+        state: present
+      when: incus_check.stdout | trim != 'installed' and ansible_distribution == "Debian"
 
-- name: Ensure Incus is installed
-  ansible.builtin.apt:
-    name:
-      - incus
-      - incus-client
-      - lxcfs
-      - criu
-      - uidmap
-    state: present
-    update_cache: yes
-  when: incus_check.stdout | trim != 'installed' and ansible_distribution == "Ubuntu" or ansible_distribution == "Debian"
+    - name: Ensure Incus is installed
+      ansible.builtin.apt:
+        name:
+          - incus
+          - incus-client
+          - lxcfs
+          - criu
+          - uidmap
+        state: present
+        update_cache: yes
+      when: incus_check.stdout | trim != 'installed' and ansible_distribution == "Debian"
 
-- name: Wait for the Incus daemon
-  ansible.builtin.command: incus admin waitready
-  changed_when: false
+    - name: Wait for the Incus daemon
+      ansible.builtin.command: incus admin waitready
+      changed_when: false
 
-- name: Check whether Incus is initialized
-  ansible.builtin.command:
-    cmd: incus profile list --format json
-  register: incus_initialization_check
-  failed_when: false
-  changed_when: false
+    - name: Check whether Incus is initialized
+      ansible.builtin.command:
+        cmd: incus profile list --format json
+      register: incus_initialization_check
+      failed_when: false
+      changed_when: false
 
-- name: Check whether macvlan profile exists
-  ansible.builtin.command: incus profile show macvlan
-  register: incus_profile_check
-  failed_when: false
-  changed_when: false
+    - name: Check whether macvlan profile exists
+      ansible.builtin.command: incus profile show macvlan
+      register: incus_profile_check
+      failed_when: false
+      changed_when: false
 
-- name: Initialize Incus with the predefined configuration
-  ansible.builtin.command:
-    cmd: incus admin init --preseed
-    stdin: |
-      config:
-        core.https_address: "{{ ansible_default_ipv4.address }}:8443"
-      storage_pools:
-        - name: default
-          driver: dir
-      networks:
-        - name: incusbr0
-          type: bridge
+    - name: Initialize Incus with the predefined configuration
+      ansible.builtin.command:
+        cmd: incus admin init --preseed
+        stdin: |
           config:
-            ipv4.address: "172.30.20.1/24"
-            ipv4.nat: "true"
-            ipv6.address: "fd40:cafe::1/64"
-            ipv6.nat: "true"
-      profiles:
-        - config: {}
-          name: default
-          description: Default profile
-          devices:
-            eth0:
-              name: eth0
-              network: incusbr0
-              type: nic
-            root:
-              path: /
-              pool: default
-              type: disk
-        - config:
-            limits.cpu: "2"
-            limits.memory: 4GB
-          #  limits.memory.enforce: soft
-            limits.memory.swap: "false"
-          description: Macvlan profile
-          devices:
-            eth0:
-              name: eth0
-              nictype: bridged
-              parent: br0
-              type: nic
-            root:
-              path: /
-              pool: default
-              type: disk
-          name: macvlan
-      cluster:
-        server_name: "{{ inventory_hostname }}"
-        enabled: {{ "false" | bool | lower }}
-  when: incus_profile_check.rc != 0
-  changed_when: true
+            core.https_address: "{{ ansible_default_ipv4.address }}:8443"
+          storage_pools:
+            - name: default
+              driver: dir
+          networks:
+            - name: incusbr0
+              type: bridge
+              config:
+                ipv4.address: "172.30.20.1/24"
+                ipv4.nat: "true"
+                ipv6.address: "fd40:cafe::1/64"
+                ipv6.nat: "true"
+          profiles:
+            - config: {}
+              name: default
+              description: Default profile
+              devices:
+                eth0:
+                  name: eth0
+                  network: incusbr0
+                  type: nic
+                root:
+                  path: /
+                  pool: default
+                  type: disk
+            - config:
+                limits.cpu: "2"
+                limits.memory: 4GB
+              #  limits.memory.enforce: soft
+                limits.memory.swap: "false"
+              description: Macvlan profile
+              devices:
+                eth0:
+                  name: eth0
+                  nictype: bridged
+                  parent: br0
+                  type: nic
+                root:
+                  path: /
+                  pool: default
+                  type: disk
+              name: macvlan
+          cluster:
+            server_name: "{{ inventory_hostname }}"
+            enabled: {{ "false" | bool | lower }}
+      when: incus_profile_check.rc != 0
+      changed_when: true
 
-- name: Add admin user to Incus groups
-  ansible.builtin.user:
-    name: "{{ admin_user }}"
-    groups: incus,incus-admin
-    append: true
-  when: admin_user is defined
+    - name: Add admin user to Incus groups
+      ansible.builtin.user:
+        name: "{{ admin_user }}"
+        groups: incus,incus-admin
+        append: true
+      when: admin_user is defined
 
-# - name: Ensure SSH directory exists
-#   ansible.builtin.file:
-#     path: /home/"{{ admin_user }}"/.ssh
-#     state: directory
-#     owner: "{{ admin_user }}"
-#     group: "{{ admin_user }}"
-#     mode: "0700"
-#   become: true
+    # - name: Ensure SSH directory exists
+    #   ansible.builtin.file:
+    #     path: /home/"{{ admin_user }}"/.ssh
+    #     state: directory
+    #     owner: "{{ admin_user }}"
+    #     group: "{{ admin_user }}"
+    #     mode: "0700"
+    #   become: true
 
-# - name: Generate RSA SSH key if it does not exist
-#   ansible.builtin.command:
-#     argv:
-#       - ssh-keygen
-#       - -t
-#       - rsa
-#       - -N
-#       - ""
-#       - -f
-#       - /home/"{{ admin_user }}"/.ssh/id_rsa
-#     creates: /home/"{{ admin_user }}"/.ssh/id_rsa
-#   become: true
-#   become_user: "{{ admin_user }}"
+    # - name: Generate RSA SSH key if it does not exist
+    #   ansible.builtin.command:
+    #     argv:
+    #       - ssh-keygen
+    #       - -t
+    #       - rsa
+    #       - -N
+    #       - ""
+    #       - -f
+    #       - /home/"{{ admin_user }}"/.ssh/id_rsa
+    #     creates: /home/"{{ admin_user }}"/.ssh/id_rsa
+    #   become: true
+    #   become_user: "{{ admin_user }}"
