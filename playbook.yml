@@ -15,7 +15,6 @@
         path: "/home/{{ admin_user }}/.ssh"
         state: directory
         owner: "{{ admin_user }}"
-        group: "{{ admin_user }}"
         mode: "0700"
       become: true
 
