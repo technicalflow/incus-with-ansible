@@ -1,11 +1,4 @@
 ---
-# - name: Check system for macvlan profile
-#   hosts: localhost
-#   gather_facts: true
-#   become: true
-#   roles:
-#     - role: system
-
 - name: Prepare Dynamic Inventory and Create Containers
   hosts: localhost
   gather_facts: false
@@ -69,7 +62,8 @@
           {"name":"{{ names[i] }}","source":"{{ sources[i] }}","path":"{{ paths[i] }}","readonly":"{{ readonlys[i] | default('true') }}"}
           {%- if not loop.last -%},{%- endif -%}
           {%- endfor -%}]
-        media_devices: "{{ _media_json | from_json }}"
+        # media_devices: "{{ _media_json | from_json }}"
+        media_devices: "{{ _media_json }}"
         security_nested: "{{ (container_item.NESTED | default('', true) | trim | lower) == 'true' }}"
       loop: "{{ incus_data.list }}"
       loop_control:

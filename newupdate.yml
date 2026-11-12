@@ -26,9 +26,10 @@
 # ==========================================================
 - name: Update all running Incus containers
   hosts: incus_running
-  serial: 1  # <==== Updates them sequentially
+  serial: 1
   gather_facts: yes
-  become: false # assuming you are already root via incus connection plugin
+  become: false
+  # assuming you are already root via incus connection plugin
   
   tasks:
     - name: Update apt cache and upgrade packages (Debian/Ubuntu)

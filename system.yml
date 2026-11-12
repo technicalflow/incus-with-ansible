@@ -48,15 +48,53 @@
         update_cache: yes
       when: incus_check.stdout | trim != 'installed' and ansible_distribution == "Debian"
 
+    - name: Enable Incus COPR
+      community.general.copr:
+        name: neil/incus
+        state: enabled
+      when: incus_check.stdout | trim != 'installed' and ansible_distribution == "RedHat"
+
+    - name: Install Incus
+      ansible.builtin.dnf:
+        name: [incus, incus-tools]
+        state: present
+      when: incus_check.stdout | trim != 'installed' and ansible_os_family == "RedHat"
+
+    - name: Set subuid/subgid ranges for root
+      ansible.builtin.lineinfile:
+        path: "{{ item }}"
+        regexp: '^root:'
+        line: "root:1000000:1000000000"
+        create: true
+        mode: "0644"
+      loop: [/etc/subuid, /etc/subgid]
+      when: incus_check.stdout | trim != 'installed' and ansible_distribution == "RedHat"
+
+    - name: Open Incus API port
+      ansible.posix.firewalld:
+        port: 8443/tcp
+        permanent: true
+        immediate: true
+        state: enabled
+      when: incus_check.stdout | trim != 'installed' and ansible_distribution == "RedHat"
+
+    - name: Put incusbr0 in trusted zone
+      ansible.posix.firewalld:
+        zone: trusted
+        interface: incusbr0
+        permanent: true
+        immediate: true
+        state: enabled
+      when: incus_check.stdout | trim != 'installed' and ansible_os_family == "RedHat"
+
+    - name: Enable and start Incus
+      ansible.builtin.systemd:
+        name: incus
+        enabled: true
+        state: started
+
     - name: Wait for the Incus daemon
       ansible.builtin.command: incus admin waitready
-      changed_when: false
-
-    - name: Check whether Incus is initialized
-      ansible.builtin.command:
-        cmd: incus profile list --format json
-      register: incus_initialization_check
-      failed_when: false
       changed_when: false
 
     - name: Check whether macvlan profile exists
@@ -114,7 +152,7 @@
               name: macvlan
           cluster:
             server_name: "{{ inventory_hostname }}"
-            enabled: {{ "false" | bool | lower }}
+            enabled: false
       when: incus_profile_check.rc != 0
       changed_when: true
 
@@ -123,7 +161,7 @@
         name: "{{ admin_user }}"
         groups: incus,incus-admin
         append: true
-      when: admin_user is defined
+      when: admin_user is defined and incus_profile_check.rc != 0
 
     # - name: Ensure SSH directory exists
     #   ansible.builtin.file:

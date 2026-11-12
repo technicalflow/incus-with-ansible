@@ -12,8 +12,8 @@
   ansible.builtin.systemd:
     name: "{{ item }}"
     state: stopped
-    enabled: true
-    masked: false
+    enabled: false
+    masked: true
   loop:
     - apt-daily-upgrade.timer
     - apt-daily.timer
