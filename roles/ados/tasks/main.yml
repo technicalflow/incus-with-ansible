@@ -175,15 +175,15 @@
   loop:
     - { proto: udp, port: "53" }
     - { proto: tcp, port: "53" }
-    - { proto: udp, port: "67" }
+    # - { proto: udp, port: "67" }
 
-- name: Allow inbound DHCP replies from gateway
-  community.general.ufw:
-    rule: allow
-    direction: in
-    proto: udp
-    from_ip: "{{ fw_gateway }}"
-    to_port: "68"
+# - name: Allow inbound DHCP replies from gateway
+#   community.general.ufw:
+#     rule: allow
+#     direction: in
+#     proto: udp
+#     from_ip: "{{ fw_gateway }}"
+#     to_port: "68"
 
 - name: Allow inbound SSH from admin subnet
   community.general.ufw:
