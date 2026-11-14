@@ -13,4 +13,5 @@ packages_to_install:
   - htop
   - git
   - netplan.io
+  - locales
   - openssh-server
